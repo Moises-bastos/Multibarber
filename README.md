@@ -12,4 +12,8 @@ Sistema de gestão para barbearias desenvolvido pela Multivor.
 
 ## Status
 
- Em desenvolvimento.
+Em desenvolvimento.
+
+## MultiBarber
+
+SaaS para gerenciamento de barbearias.
