@@ -17,16 +17,27 @@ type HorarioBanco = {
 };
 
 function Configuracoes() {
-  const [nome, setNome] = useState("Barbearia do João");
+  const [barbeariaId, setBarbeariaId] = useState("");
+  const [slugBarbearia, setSlugBarbearia] = useState("");
+  const [carregandoBarbearia, setCarregandoBarbearia] = useState(true);
+
+  const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("(86) 99999-9999");
   const [descricao, setDescricao] = useState(
     "Cortes modernos, barba e atendimento personalizado.",
   );
 
-  const [salvo, setSalvo] = useState(false);
+  const [salvandoInformacoes, setSalvandoInformacoes] = useState(false);
+  const [mensagemInformacoes, setMensagemInformacoes] = useState("");
+  const [erroInformacoes, setErroInformacoes] = useState("");
+
   const [copiado, setCopiado] = useState(false);
+  const [erroLink, setErroLink] = useState("");
+
   const [carregandoHorarios, setCarregandoHorarios] = useState(true);
   const [salvandoHorarios, setSalvandoHorarios] = useState(false);
+  const [mensagemHorarios, setMensagemHorarios] = useState("");
+  const [erroHorarios, setErroHorarios] = useState("");
 
   const [horarios, setHorarios] = useState<Record<string, Horario>>({
     "Segunda-feira": {
@@ -76,10 +87,29 @@ function Configuracoes() {
     "Sábado",
   ];
 
-  // =========================
-  // CARREGAR HORÁRIOS
-  // =========================
+  // Carregar os dados da barbearia do usuário autenticado.
+  useEffect(() => {
+    async function carregarDadosBarbearia() {
+      try {
+        const barbearia = await buscarMinhaBarbearia();
 
+        setBarbeariaId(barbearia.id);
+        setNome(barbearia.nome);
+        setSlugBarbearia(barbearia.slug);
+      } catch (error) {
+        console.error("Erro ao carregar barbearia:", error);
+        setErroInformacoes(
+          "Não foi possível carregar os dados da barbearia. Verifique se você está conectado.",
+        );
+      } finally {
+        setCarregandoBarbearia(false);
+      }
+    }
+
+    carregarDadosBarbearia();
+  }, []);
+
+  // Carregar os horários de funcionamento salvos no Supabase.
   useEffect(() => {
     async function carregarHorarios() {
       try {
@@ -104,9 +134,7 @@ function Configuracoes() {
         const dados = data as HorarioBanco[];
 
         setHorarios((horariosAtuais) => {
-          const novosHorarios = {
-            ...horariosAtuais,
-          };
+          const novosHorarios = { ...horariosAtuais };
 
           dados.forEach((horario) => {
             const dia = dias[horario.dia_semana];
@@ -124,8 +152,9 @@ function Configuracoes() {
 
           return novosHorarios;
         });
-      } catch (erro) {
-        console.error("Erro ao carregar horários:", erro);
+      } catch (error) {
+        console.error("Erro ao carregar horários:", error);
+        setErroHorarios("Não foi possível carregar os horários.");
       } finally {
         setCarregandoHorarios(false);
       }
@@ -134,19 +163,25 @@ function Configuracoes() {
     carregarHorarios();
   }, []);
 
-  // =========================
-  // SALVAR HORÁRIOS
-  // =========================
-
+  // Salvar os horários de funcionamento no Supabase.
   async function salvarHorarios() {
-    try {
-      setSalvandoHorarios(true);
+    setSalvandoHorarios(true);
+    setMensagemHorarios("");
+    setErroHorarios("");
 
+    try {
       const barbearia = await buscarMinhaBarbearia();
 
       for (let i = 0; i < dias.length; i++) {
         const dia = dias[i];
         const horario = horarios[dia];
+
+        if (horario.aberto && horario.inicio >= horario.fim) {
+          setErroHorarios(
+            `Confira os horários de ${dia}: o horário de fechamento precisa ser posterior ao de abertura.`,
+          );
+          return;
+        }
 
         const { error } = await supabase.from("horarios_funcionamento").upsert(
           {
@@ -166,41 +201,81 @@ function Configuracoes() {
         }
       }
 
-      setSalvo(true);
-
-      setTimeout(() => {
-        setSalvo(false);
-      }, 3000);
-    } catch (erro) {
-      console.error("Erro ao salvar horários:", erro);
+      setMensagemHorarios("Horários salvos com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar horários:", error);
+      setErroHorarios("Não foi possível salvar os horários. Tente novamente.");
     } finally {
       setSalvandoHorarios(false);
     }
   }
 
-  // =========================
-  // COPIAR LINK
-  // =========================
+  // Salvar o nome da barbearia no Supabase.
+  async function salvarInformacoes() {
+    if (!barbeariaId) {
+      setErroInformacoes("Não foi possível identificar sua barbearia.");
+      return;
+    }
 
-  const copiarLink = async () => {
-    const link = window.location.origin + "/barbearia/barbearia-322aa544";
+    if (nome.trim().length < 3) {
+      setErroInformacoes(
+        "O nome da barbearia precisa ter pelo menos 3 caracteres.",
+      );
+      return;
+    }
+
+    setSalvandoInformacoes(true);
+    setMensagemInformacoes("");
+    setErroInformacoes("");
 
     try {
-      await navigator.clipboard.writeText(link);
+      const { error } = await supabase
+        .from("barbearias")
+        .update({ nome: nome.trim() })
+        .eq("id", barbeariaId);
 
-      setCopiado(true);
+      if (error) {
+        throw error;
+      }
 
-      setTimeout(() => {
-        setCopiado(false);
-      }, 3000);
-    } catch (erro) {
-      console.error("Erro ao copiar:", erro);
+      setNome(nome.trim());
+      setMensagemInformacoes("Nome da barbearia salvo com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar informações:", error);
+      setErroInformacoes("Não foi possível salvar o nome da barbearia.");
+    } finally {
+      setSalvandoInformacoes(false);
     }
-  };
+  }
+
+  // Montar o link com o domínio atual e o slug da barbearia autenticada.
+  const linkPublico = slugBarbearia
+    ? `${window.location.origin}/barbearia/${slugBarbearia}`
+    : "";
+
+  // Copiar o link público de agendamento.
+  async function copiarLink() {
+    setErroLink("");
+    setCopiado(false);
+
+    if (!linkPublico) {
+      setErroLink("O link ainda não está disponível.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(linkPublico);
+      setCopiado(true);
+    } catch (error) {
+      console.error("Erro ao copiar link:", error);
+      setErroLink(
+        "Não foi possível copiar automaticamente. Selecione e copie o link manualmente.",
+      );
+    }
+  }
 
   return (
     <div className="p-8">
-      {/* Cabeçalho */}
       <header>
         <p className="text-zinc-400">
           Gerencie as informações da sua barbearia
@@ -217,62 +292,74 @@ function Configuracoes() {
           Essas informações serão exibidas para seus clientes.
         </p>
 
-        <div className="mt-6 grid gap-5 md:grid-cols-2">
-          {/* Nome */}
-          <div>
-            <label className="mb-2 block text-sm text-zinc-300">
-              Nome da barbearia
-            </label>
+        {carregandoBarbearia ? (
+          <p className="mt-6 text-sm text-zinc-400">
+            Carregando dados da barbearia...
+          </p>
+        ) : (
+          <>
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">
+                  Nome da barbearia
+                </label>
 
-            <input
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
-            />
-          </div>
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
+                />
+              </div>
 
-          {/* Telefone */}
-          <div>
-            <label className="mb-2 block text-sm text-zinc-300">Telefone</label>
+              <div>
+                <label className="mb-2 block text-sm text-zinc-300">
+                  Telefone
+                </label>
 
-            <input
-              type="tel"
-              value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
-            />
-          </div>
-        </div>
+                <input
+                  type="tel"
+                  value={telefone}
+                  onChange={(e) => setTelefone(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
+                />
+              </div>
+            </div>
 
-        {/* Descrição */}
-        <div className="mt-5">
-          <label className="mb-2 block text-sm text-zinc-300">Descrição</label>
+            <div className="mt-5">
+              <label className="mb-2 block text-sm text-zinc-300">
+                Descrição
+              </label>
 
-          <textarea
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-            rows={4}
-            className="w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
-          />
-        </div>
+              <textarea
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                rows={4}
+                className="w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
+              />
+            </div>
 
-        {/* Salvar informações */}
-        <button
-          type="button"
-          onClick={() => {
-            setSalvo(true);
+            <button
+              type="button"
+              onClick={salvarInformacoes}
+              disabled={salvandoInformacoes}
+              className="mt-5 flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save size={18} />
+              {salvandoInformacoes ? "Salvando..." : "Salvar alterações"}
+            </button>
 
-            setTimeout(() => {
-              setSalvo(false);
-            }, 3000);
-          }}
-          className="mt-5 flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-3 font-semibold text-black transition hover:bg-amber-400"
-        >
-          <Save size={18} />
+            {mensagemInformacoes && (
+              <p className="mt-3 text-sm text-green-400">
+                {mensagemInformacoes}
+              </p>
+            )}
 
-          {salvo ? "Alterações salvas!" : "Salvar alterações"}
-        </button>
+            {erroInformacoes && (
+              <p className="mt-3 text-sm text-red-400">{erroInformacoes}</p>
+            )}
+          </>
+        )}
       </section>
 
       {/* Link público */}
@@ -291,27 +378,39 @@ function Configuracoes() {
           </div>
         </div>
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <input
             type="text"
             readOnly
-            value="multibarber.com/barbearia/barbearia-322aa544"
-            className="flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-zinc-400 outline-none"
+            value={
+              carregandoBarbearia
+                ? "Carregando link..."
+                : linkPublico || "Não foi possível carregar o link"
+            }
+            className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-zinc-300 outline-none"
           />
 
           <button
             type="button"
             onClick={copiarLink}
-            className="flex items-center gap-2 rounded-lg border border-zinc-700 px-4 py-3 text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+            disabled={carregandoBarbearia || !linkPublico}
+            className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-3 text-zinc-300 transition hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Copy size={18} />
-
             {copiado ? "Copiado!" : "Copiar"}
           </button>
         </div>
+
+        {erroLink && <p className="mt-3 text-sm text-red-400">{erroLink}</p>}
+
+        {copiado && (
+          <p className="mt-3 text-sm text-green-400">
+            Link copiado! Agora você pode enviá-lo aos seus clientes.
+          </p>
+        )}
       </section>
 
-      {/* Horários */}
+      {/* Horários de funcionamento */}
       <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="text-xl font-semibold">Horário de funcionamento</h2>
 
@@ -335,7 +434,6 @@ function Configuracoes() {
                     className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      {/* Dia */}
                       <div>
                         <p className="font-medium">{dia}</p>
 
@@ -348,7 +446,6 @@ function Configuracoes() {
                         </p>
                       </div>
 
-                      {/* Controles */}
                       <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="button"
@@ -360,6 +457,8 @@ function Configuracoes() {
                                 aberto: !horariosAtuais[dia].aberto,
                               },
                             }));
+                            setMensagemHorarios("");
+                            setErroHorarios("");
                           }}
                           className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                             horario.aberto
@@ -374,6 +473,7 @@ function Configuracoes() {
                           <>
                             <input
                               type="time"
+                              aria-label={`Abertura ${dia}`}
                               value={horario.inicio}
                               onChange={(e) => {
                                 setHorarios((horariosAtuais) => ({
@@ -383,6 +483,8 @@ function Configuracoes() {
                                     inicio: e.target.value,
                                   },
                                 }));
+                                setMensagemHorarios("");
+                                setErroHorarios("");
                               }}
                               className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white outline-none focus:border-amber-500"
                             />
@@ -391,6 +493,7 @@ function Configuracoes() {
 
                             <input
                               type="time"
+                              aria-label={`Fechamento ${dia}`}
                               value={horario.fim}
                               onChange={(e) => {
                                 setHorarios((horariosAtuais) => ({
@@ -400,6 +503,8 @@ function Configuracoes() {
                                     fim: e.target.value,
                                   },
                                 }));
+                                setMensagemHorarios("");
+                                setErroHorarios("");
                               }}
                               className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white outline-none focus:border-amber-500"
                             />
@@ -419,13 +524,16 @@ function Configuracoes() {
               className="mt-6 flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save size={18} />
-
-              {salvandoHorarios
-                ? "Salvando..."
-                : salvo
-                  ? "Horários salvos!"
-                  : "Salvar horários"}
+              {salvandoHorarios ? "Salvando..." : "Salvar horários"}
             </button>
+
+            {mensagemHorarios && (
+              <p className="mt-3 text-sm text-green-400">{mensagemHorarios}</p>
+            )}
+
+            {erroHorarios && (
+              <p className="mt-3 text-sm text-red-400">{erroHorarios}</p>
+            )}
           </>
         )}
       </section>
