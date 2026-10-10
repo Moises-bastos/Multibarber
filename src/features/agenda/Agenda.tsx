@@ -53,15 +53,9 @@ function Agenda() {
   const [dias, setDias] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
 
-  /*
-   * Bloqueios da agenda
-   */
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([]);
   const [carregandoBloqueios, setCarregandoBloqueios] = useState(false);
 
-  /*
-   * Modal de bloqueio
-   */
   const [modalBloqueioAberto, setModalBloqueioAberto] = useState(false);
   const [dataBloqueio, setDataBloqueio] = useState("");
   const [tipoBloqueio, setTipoBloqueio] = useState<TipoBloqueio>("horario");
@@ -70,16 +64,12 @@ function Agenda() {
   const [motivo, setMotivo] = useState("");
   const [salvandoBloqueio, setSalvandoBloqueio] = useState(false);
 
-  /*
-   * Gera os próximos 7 dias.
-   */
   function gerarProximosDias() {
     const datas: string[] = [];
     const hoje = new Date();
 
     for (let i = 0; i < 7; i++) {
       const data = new Date(hoje);
-
       data.setDate(hoje.getDate() + i);
 
       const ano = data.getFullYear();
@@ -92,9 +82,6 @@ function Agenda() {
     return datas;
   }
 
-  /*
-   * Busca os agendamentos reais do Supabase.
-   */
   async function carregarAgendamentos() {
     try {
       setCarregando(true);
@@ -105,20 +92,20 @@ function Agenda() {
         .from("agendamentos")
         .select(
           `
-            id,
-            data,
-            horario,
-            status,
-            cliente:clientes(
-              nome,
-              telefone
-            ),
-            servico:servicos(
-              nome,
-              preco,
-              duracao
-            )
-          `,
+          id,
+          data,
+          horario,
+          status,
+          cliente:clientes(
+            nome,
+            telefone
+          ),
+          servico:servicos(
+            nome,
+            preco,
+            duracao
+          )
+        `,
         )
         .eq("barbearia_id", barbearia.id)
         .order("data", { ascending: true })
@@ -156,9 +143,6 @@ function Agenda() {
     }
   }
 
-  /*
-   * Busca os bloqueios da data selecionada.
-   */
   async function carregarBloqueios(data: string) {
     if (!data) {
       setBloqueios([]);
@@ -174,13 +158,13 @@ function Agenda() {
         .from("bloqueios_agenda")
         .select(
           `
-            id,
-            data,
-            hora_inicio,
-            hora_fim,
-            dia_inteiro,
-            motivo
-          `,
+          id,
+          data,
+          hora_inicio,
+          hora_fim,
+          dia_inteiro,
+          motivo
+        `,
         )
         .eq("barbearia_id", barbearia.id)
         .eq("data", data)
@@ -202,38 +186,30 @@ function Agenda() {
     }
   }
 
-  /*
-   * Carrega a agenda quando a página abre.
-   */
   useEffect(() => {
     const proximosDias = gerarProximosDias();
 
     setDias(proximosDias);
-
     carregarAgendamentos();
   }, []);
 
-  /*
-   * Quando o dia selecionado muda,
-   * busca os bloqueios daquele dia.
-   */
+  const dataAtual = dias[diaSelecionado];
+
   useEffect(() => {
     if (dataAtual) {
       carregarBloqueios(dataAtual);
     }
-  }, [diaSelecionado, dias]);
+  }, [dataAtual]);
 
-  /*
-   * Altera o status do agendamento no Supabase.
-   */
   async function alterarStatus(id: number, novoStatus: Agendamento["status"]) {
     try {
+      const barbearia = await buscarMinhaBarbearia();
+
       const { error } = await supabase
         .from("agendamentos")
-        .update({
-          status: novoStatus,
-        })
-        .eq("id", id);
+        .update({ status: novoStatus })
+        .eq("id", id)
+        .eq("barbearia_id", barbearia.id);
 
       if (error) {
         throw error;
@@ -242,10 +218,7 @@ function Agenda() {
       setAgendamentos((atual) =>
         atual.map((agendamento) =>
           agendamento.id === id
-            ? {
-                ...agendamento,
-                status: novoStatus,
-              }
+            ? { ...agendamento, status: novoStatus }
             : agendamento,
         ),
       );
@@ -253,28 +226,19 @@ function Agenda() {
       setAgendamentoSelecionado(null);
     } catch (error) {
       console.error("ERRO AO ALTERAR STATUS:", error);
+      alert("Não foi possível atualizar o agendamento.");
     }
   }
 
-  /*
-   * Abre o modal para criar um bloqueio.
-   *
-   * IMPORTANTE:
-   * Agora a data pode ser escolhida manualmente.
-   */
   function abrirModalBloqueio() {
     setDataBloqueio(dataAtual || "");
     setTipoBloqueio("horario");
     setHoraInicio("");
     setHoraFim("");
     setMotivo("");
-
     setModalBloqueioAberto(true);
   }
 
-  /*
-   * Cria um bloqueio no Supabase.
-   */
   async function criarBloqueio() {
     try {
       if (!dataBloqueio) {
@@ -313,10 +277,6 @@ function Agenda() {
 
       setModalBloqueioAberto(false);
 
-      /*
-       * Se o bloqueio foi criado para o dia atualmente
-       * selecionado, atualiza a lista imediatamente.
-       */
       if (dataBloqueio === dataAtual) {
         await carregarBloqueios(dataBloqueio);
       }
@@ -332,9 +292,6 @@ function Agenda() {
     }
   }
 
-  /*
-   * Remove um bloqueio.
-   */
   async function excluirBloqueio(id: number) {
     const confirmar = window.confirm("Deseja realmente remover este bloqueio?");
 
@@ -343,10 +300,13 @@ function Agenda() {
     }
 
     try {
+      const barbearia = await buscarMinhaBarbearia();
+
       const { error } = await supabase
         .from("bloqueios_agenda")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("barbearia_id", barbearia.id);
 
       if (error) {
         throw error;
@@ -359,9 +319,6 @@ function Agenda() {
     }
   }
 
-  /*
-   * Formata preço.
-   */
   function formatarPreco(preco: number) {
     return preco.toLocaleString("pt-BR", {
       style: "currency",
@@ -369,12 +326,8 @@ function Agenda() {
     });
   }
 
-  /*
-   * Formata a data.
-   */
   function formatarData(dataString: string) {
     const [ano, mes, dia] = dataString.split("-").map(Number);
-
     const data = new Date(ano, mes - 1, dia);
 
     return data.toLocaleDateString("pt-BR", {
@@ -383,12 +336,8 @@ function Agenda() {
     });
   }
 
-  /*
-   * Descobre o dia da semana.
-   */
   function nomeDiaSemana(dataString: string) {
     const [ano, mes, dia] = dataString.split("-").map(Number);
-
     const data = new Date(ano, mes - 1, dia);
 
     return data.toLocaleDateString("pt-BR", {
@@ -396,108 +345,81 @@ function Agenda() {
     });
   }
 
-  /*
-   * Capitaliza o primeiro caractere.
-   */
   function primeiraMaiuscula(texto: string) {
     return texto.charAt(0).toUpperCase() + texto.slice(1);
   }
 
-  /*
-   * Texto do status.
-   */
   function getStatusTexto(status: Agendamento["status"]) {
     switch (status) {
       case "agendado":
         return "Pendente";
-
       case "confirmado":
         return "Atendido";
-
       case "cancelado":
         return "Cancelado";
-
       default:
         return "";
     }
   }
 
-  /*
-   * Classes do status.
-   */
   function getStatusClasses(status: Agendamento["status"]) {
     switch (status) {
       case "agendado":
         return "bg-amber-500/10 text-amber-400";
-
       case "confirmado":
         return "bg-green-500/10 text-green-400";
-
       case "cancelado":
         return "bg-red-500/10 text-red-400";
-
       default:
         return "bg-zinc-800 text-zinc-500";
     }
   }
 
-  /*
-   * Data selecionada.
-   */
-  const dataAtual = dias[diaSelecionado];
-
-  /*
-   * Agendamentos daquele dia.
-   */
   const agendamentosDoDia = agendamentos.filter(
     (agendamento) => agendamento.data === dataAtual,
   );
 
-  /*
-   * Quantidade de atendimentos do dia.
-   */
   const quantidadeAtendimentos = agendamentosDoDia.filter(
     (agendamento) => agendamento.status !== "cancelado",
   ).length;
 
-  /*
-   * Lista de horários usados no dia.
-   */
   const horariosDoDia = agendamentosDoDia;
 
   return (
-    <div className="p-8">
+    <div className="min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 md:p-8">
       {/* Cabeçalho */}
-      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-zinc-400">Organize os horários da sua barbearia</p>
+      <header className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <p className="break-words text-sm text-zinc-400 sm:text-base">
+            Organize os horários da sua barbearia
+          </p>
 
-          <h1 className="mt-1 text-3xl font-bold">Agenda</h1>
+          <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Agenda</h1>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <button
             type="button"
             onClick={abrirModalBloqueio}
-            className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-400"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-400 sm:w-auto"
           >
-            <Ban size={16} />
+            <Ban size={16} className="shrink-0" />
             Bloquear horário
           </button>
 
           <button
             type="button"
             onClick={carregarAgendamentos}
-            className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white sm:w-auto"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={16} className="shrink-0" />
             Atualizar
           </button>
         </div>
       </header>
 
-      {/* Seleção de dias */}
-      <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+      {/* Seleção dos próximos sete dias */}
+      <div className="mt-6 grid grid-cols-2 gap-2 sm:mt-8 sm:gap-3 md:grid-cols-4 lg:grid-cols-7">
         {dias.map((data, index) => {
           const diaSemana = primeiraMaiuscula(nomeDiaSemana(data));
 
@@ -506,32 +428,32 @@ function Agenda() {
               key={data}
               type="button"
               onClick={() => setDiaSelecionado(index)}
-              className={`rounded-xl border p-4 text-left transition ${
+              className={`min-w-0 break-words rounded-xl border p-3 text-left transition sm:p-4 ${
                 diaSelecionado === index
                   ? "border-amber-500 bg-amber-500 text-black"
                   : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-white"
               }`}
             >
-              <p className="text-sm">{diaSemana}</p>
-
-              <p className="mt-1 font-semibold">{formatarData(data)}</p>
+              <p className="break-words text-sm">{diaSemana}</p>
+              <p className="mt-1 break-words text-sm font-semibold sm:text-base">
+                {formatarData(data)}
+              </p>
             </button>
           );
         })}
       </div>
 
-      {/* Data atual */}
+      {/* Resumo do dia */}
       {dataAtual && (
-        <div className="mt-6 flex flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+        <div className="mt-5 flex min-w-0 flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
               <CalendarDays size={20} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-zinc-500">Agenda de</p>
-
-              <p className="font-semibold">
+              <p className="break-words font-semibold">
                 {primeiraMaiuscula(nomeDiaSemana(dataAtual))},{" "}
                 {formatarData(dataAtual)}
               </p>
@@ -539,8 +461,7 @@ function Agenda() {
           </div>
 
           <div className="flex items-center gap-2 text-sm text-zinc-500">
-            <Clock size={16} />
-
+            <Clock size={16} className="shrink-0" />
             <span>
               {quantidadeAtendimentos}{" "}
               {quantidadeAtendimentos === 1 ? "atendimento" : "atendimentos"}
@@ -551,17 +472,16 @@ function Agenda() {
 
       {/* Bloqueios do dia */}
       {dataAtual && (
-        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+        <div className="mt-5 min-w-0 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:mt-6 sm:p-5">
+          <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
                 <Ban size={19} />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <h2 className="font-semibold">Bloqueios do dia</h2>
-
-                <p className="text-sm text-zinc-500">
+                <p className="mt-1 break-words text-sm text-zinc-500">
                   Horários em que novos agendamentos não serão permitidos.
                 </p>
               </div>
@@ -570,7 +490,7 @@ function Agenda() {
             <button
               type="button"
               onClick={abrirModalBloqueio}
-              className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-3 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white md:w-auto"
             >
               <Plus size={16} />
               Adicionar bloqueio
@@ -582,7 +502,7 @@ function Agenda() {
               Carregando bloqueios...
             </p>
           ) : bloqueios.length === 0 ? (
-            <div className="mt-5 rounded-lg border border-dashed border-zinc-800 p-5 text-center">
+            <div className="mt-5 rounded-lg border border-dashed border-zinc-800 p-4 text-center sm:p-5">
               <p className="text-sm text-zinc-600">
                 Nenhum bloqueio para este dia.
               </p>
@@ -592,23 +512,20 @@ function Agenda() {
               {bloqueios.map((bloqueio) => (
                 <div
                   key={bloqueio.id}
-                  className="flex flex-col gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-4 md:flex-row md:items-center md:justify-between"
+                  className="flex min-w-0 flex-col gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3 sm:p-4 md:flex-row md:items-center md:justify-between"
                 >
-                  <div className="flex items-center gap-3">
-                    <Ban size={18} className="shrink-0 text-red-400" />
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Ban size={18} className="mt-1 shrink-0 text-red-400" />
 
-                    <div>
-                      <p className="font-medium text-red-300">
+                    <div className="min-w-0">
+                      <p className="break-words font-medium text-red-300">
                         {bloqueio.dia_inteiro
                           ? "Dia inteiro bloqueado"
-                          : `${bloqueio.hora_inicio?.slice(
-                              0,
-                              5,
-                            )} às ${bloqueio.hora_fim?.slice(0, 5)}`}
+                          : `${bloqueio.hora_inicio?.slice(0, 5)} às ${bloqueio.hora_fim?.slice(0, 5)}`}
                       </p>
 
                       {bloqueio.motivo && (
-                        <p className="mt-1 text-sm text-zinc-500">
+                        <p className="mt-1 break-words text-sm text-zinc-500">
                           {bloqueio.motivo}
                         </p>
                       )}
@@ -618,7 +535,7 @@ function Agenda() {
                   <button
                     type="button"
                     onClick={() => excluirBloqueio(bloqueio.id)}
-                    className="flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-900/50 px-3 py-3 text-sm text-red-400 transition hover:bg-red-500/10 md:w-auto"
                   >
                     <Trash2 size={15} />
                     Remover
@@ -630,18 +547,18 @@ function Agenda() {
         </div>
       )}
 
-      {/* Carregando */}
+      {/* Carregamento */}
       {carregando && (
-        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-500">
+        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-500 sm:p-8">
           Carregando agendamentos...
         </div>
       )}
 
-      {/* Agenda */}
+      {/* Lista de agendamentos */}
       {!carregando && (
-        <div className="mt-6 space-y-3">
+        <div className="mt-5 min-w-0 space-y-3 sm:mt-6">
           {horariosDoDia.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-10 text-center">
+            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-6 text-center sm:p-10">
               <Clock size={32} className="mx-auto text-zinc-700" />
 
               <p className="mt-3 font-medium text-zinc-500">
@@ -656,7 +573,7 @@ function Agenda() {
             horariosDoDia.map((agendamento) => (
               <div
                 key={agendamento.id}
-                className={`flex flex-col gap-4 rounded-xl border p-5 md:flex-row md:items-center md:justify-between ${
+                className={`flex min-w-0 flex-col gap-4 rounded-xl border p-4 sm:p-5 md:flex-row md:items-center md:justify-between ${
                   agendamento.status === "cancelado"
                     ? "border-red-900/30 bg-zinc-950 opacity-60"
                     : agendamento.status === "agendado"
@@ -664,43 +581,40 @@ function Agenda() {
                       : "border-zinc-800 bg-zinc-900"
                 }`}
               >
-                {/* Horário + informações */}
-                <div className="flex items-center gap-6">
-                  <span className="w-16 text-lg font-semibold">
+                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
+                  <span className="text-lg font-semibold sm:w-16">
                     {agendamento.horario}
                   </span>
 
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
                       <UserRound size={18} />
                     </div>
 
-                    <div>
-                      <p className="font-medium">{agendamento.cliente.nome}</p>
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">
+                        {agendamento.cliente.nome}
+                      </p>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
-                        <Scissors size={14} />
-
-                        <span>{agendamento.servico.nome}</span>
-
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-sm text-zinc-500">
+                        <Scissors size={14} className="shrink-0" />
+                        <span className="break-words">
+                          {agendamento.servico.nome}
+                        </span>
                         <span>•</span>
-
                         <span>{formatarPreco(agendamento.servico.preco)}</span>
-
                         <span>•</span>
-
                         <span>{agendamento.servico.duracao} min</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Status / ação */}
                 {agendamento.status === "agendado" ? (
                   <button
                     type="button"
                     onClick={() => setAgendamentoSelecionado(agendamento)}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2 font-semibold text-black shadow-lg shadow-green-500/10 transition hover:bg-green-400"
+                    className="flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-green-500/10 transition hover:bg-green-400 md:w-auto"
                   >
                     <Check size={17} />
                     Confirmar atendimento
@@ -709,9 +623,7 @@ function Agenda() {
                   <button
                     type="button"
                     onClick={() => setAgendamentoSelecionado(agendamento)}
-                    className={`rounded-full px-3 py-1 text-sm transition hover:opacity-80 ${getStatusClasses(
-                      agendamento.status,
-                    )}`}
+                    className={`self-start rounded-full px-3 py-2 text-sm transition hover:opacity-80 sm:self-auto ${getStatusClasses(agendamento.status)}`}
                   >
                     {getStatusTexto(agendamento.status)}
                   </button>
@@ -724,13 +636,11 @@ function Agenda() {
 
       {/* Modal de agendamento */}
       {agendamentoSelecionado && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            {/* Cabeçalho */}
-            <div className="flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">
+          <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">Agendamento</h2>
-
                 <p className="mt-1 text-sm text-zinc-500">
                   Gerencie este atendimento
                 </p>
@@ -739,62 +649,52 @@ function Agenda() {
               <button
                 type="button"
                 onClick={() => setAgendamentoSelecionado(null)}
-                className="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+                aria-label="Fechar modal"
+                className="shrink-0 rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Informações */}
-            <div className="mt-6 space-y-4">
-              {/* Cliente */}
+            <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
                 <p className="text-sm text-zinc-500">Cliente</p>
-
-                <p className="mt-1 font-semibold">
+                <p className="mt-1 break-words font-semibold">
                   {agendamentoSelecionado.cliente.nome}
                 </p>
-
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 break-words text-sm text-zinc-500">
                   {agendamentoSelecionado.cliente.telefone}
                 </p>
               </div>
 
-              {/* Horário e valor */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
                   <p className="text-sm text-zinc-500">Horário</p>
-
                   <p className="mt-1 font-semibold">
                     {agendamentoSelecionado.horario}
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
                   <p className="text-sm text-zinc-500">Valor</p>
-
-                  <p className="mt-1 font-semibold text-amber-500">
+                  <p className="mt-1 break-words font-semibold text-amber-500">
                     {formatarPreco(agendamentoSelecionado.servico.preco)}
                   </p>
                 </div>
               </div>
 
-              {/* Serviço */}
               <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
                 <p className="text-sm text-zinc-500">Serviço</p>
-
-                <p className="mt-1 font-semibold">
+                <p className="mt-1 break-words font-semibold">
                   {agendamentoSelecionado.servico.nome}
                 </p>
-
                 <p className="mt-1 text-sm text-zinc-500">
                   Duração: {agendamentoSelecionado.servico.duracao} minutos
                 </p>
               </div>
 
-              {/* Aviso */}
               {agendamentoSelecionado.status === "agendado" && (
-                <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 sm:p-4">
                   <AlertTriangle
                     size={20}
                     className="mt-0.5 shrink-0 text-amber-400"
@@ -802,7 +702,6 @@ function Agenda() {
 
                   <div>
                     <p className="font-semibold text-amber-400">Atenção</p>
-
                     <p className="mt-1 text-sm leading-relaxed text-amber-200/80">
                       Confirme somente depois de realizar o corte. Ao confirmar,
                       este atendimento será registrado no histórico do cliente e
@@ -813,8 +712,7 @@ function Agenda() {
               )}
             </div>
 
-            {/* Ações */}
-            <div className="mt-6 space-y-3">
+            <div className="mt-5 space-y-3">
               {agendamentoSelecionado.status === "agendado" && (
                 <>
                   <button
@@ -869,13 +767,11 @@ function Agenda() {
 
       {/* Modal de bloqueio */}
       {modalBloqueioAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-            {/* Cabeçalho */}
-            <div className="flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">
+          <div className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">Bloquear agenda</h2>
-
                 <p className="mt-1 text-sm text-zinc-500">
                   Impedir novos agendamentos em um período.
                 </p>
@@ -884,25 +780,23 @@ function Agenda() {
               <button
                 type="button"
                 onClick={() => setModalBloqueioAberto(false)}
-                className="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+                aria-label="Fechar modal"
+                className="shrink-0 rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Data */}
-            <div className="mt-6">
+            <div className="mt-5">
               <label className="text-sm font-medium text-zinc-300">Data</label>
-
               <input
                 type="date"
                 value={dataBloqueio}
                 onChange={(event) => setDataBloqueio(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-white outline-none transition focus:border-amber-500"
+                className="mt-2 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-white outline-none transition focus:border-amber-500"
               />
             </div>
 
-            {/* Tipo */}
             <div className="mt-5">
               <label className="text-sm font-medium text-zinc-300">
                 Tipo de bloqueio
@@ -937,72 +831,64 @@ function Agenda() {
               </div>
             </div>
 
-            {/* Horários */}
             {tipoBloqueio === "horario" && (
               <div className="mt-5 grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <label className="text-sm font-medium text-zinc-300">
                     Início
                   </label>
-
                   <input
                     type="time"
                     value={horaInicio}
                     onChange={(event) => setHoraInicio(event.target.value)}
-                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-white outline-none transition focus:border-amber-500"
+                    className="mt-2 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-3 text-white outline-none transition focus:border-amber-500 sm:px-3"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="text-sm font-medium text-zinc-300">
                     Fim
                   </label>
-
                   <input
                     type="time"
                     value={horaFim}
                     onChange={(event) => setHoraFim(event.target.value)}
-                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-white outline-none transition focus:border-amber-500"
+                    className="mt-2 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-3 text-white outline-none transition focus:border-amber-500 sm:px-3"
                   />
                 </div>
               </div>
             )}
 
-            {/* Motivo */}
             <div className="mt-5">
               <label className="text-sm font-medium text-zinc-300">
                 Motivo <span className="text-zinc-600">(opcional)</span>
               </label>
-
               <input
                 type="text"
                 value={motivo}
                 onChange={(event) => setMotivo(event.target.value)}
                 placeholder="Ex.: Almoço, médico, compromisso..."
                 maxLength={200}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-white placeholder:text-zinc-600 outline-none transition focus:border-amber-500"
+                className="mt-2 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-white placeholder:text-zinc-600 outline-none transition focus:border-amber-500"
               />
             </div>
 
-            {/* Informação */}
-            <div className="mt-5 flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <div className="mt-5 flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 sm:p-4">
               <AlertTriangle
                 size={18}
                 className="mt-0.5 shrink-0 text-amber-400"
               />
-
               <p className="text-sm leading-relaxed text-zinc-400">
                 Clientes não poderão agendar horários que coincidam com este
                 bloqueio.
               </p>
             </div>
 
-            {/* Ações */}
-            <div className="mt-6 flex gap-3">
+            <div className="mt-5 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:gap-3">
               <button
                 type="button"
                 onClick={() => setModalBloqueioAberto(false)}
-                className="flex-1 rounded-lg border border-zinc-700 px-4 py-3 text-zinc-300 transition hover:bg-zinc-800"
+                className="w-full rounded-lg border border-zinc-700 px-4 py-3 text-zinc-300 transition hover:bg-zinc-800 sm:flex-1"
               >
                 Cancelar
               </button>
@@ -1011,7 +897,7 @@ function Agenda() {
                 type="button"
                 onClick={criarBloqueio}
                 disabled={salvandoBloqueio}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
               >
                 {salvandoBloqueio ? (
                   "Salvando..."
