@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Copy, Link as LinkIcon, Save } from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
 
@@ -22,7 +23,7 @@ function Configuracoes() {
   const [carregandoBarbearia, setCarregandoBarbearia] = useState(true);
 
   const [nome, setNome] = useState("");
-  const [telefone, setTelefone] = useState("(86) 99999-9999");
+  const [telefone, setTelefone] = useState("");
   const [descricao, setDescricao] = useState(
     "Cortes modernos, barba e atendimento personalizado.",
   );
@@ -40,41 +41,13 @@ function Configuracoes() {
   const [erroHorarios, setErroHorarios] = useState("");
 
   const [horarios, setHorarios] = useState<Record<string, Horario>>({
-    "Segunda-feira": {
-      aberto: true,
-      inicio: "08:00",
-      fim: "18:00",
-    },
-    "Terça-feira": {
-      aberto: true,
-      inicio: "08:00",
-      fim: "18:00",
-    },
-    "Quarta-feira": {
-      aberto: true,
-      inicio: "08:00",
-      fim: "18:00",
-    },
-    "Quinta-feira": {
-      aberto: true,
-      inicio: "08:00",
-      fim: "18:00",
-    },
-    "Sexta-feira": {
-      aberto: true,
-      inicio: "08:00",
-      fim: "18:00",
-    },
-    Sábado: {
-      aberto: true,
-      inicio: "08:00",
-      fim: "14:00",
-    },
-    Domingo: {
-      aberto: false,
-      inicio: "08:00",
-      fim: "18:00",
-    },
+    "Segunda-feira": { aberto: true, inicio: "08:00", fim: "18:00" },
+    "Terça-feira": { aberto: true, inicio: "08:00", fim: "18:00" },
+    "Quarta-feira": { aberto: true, inicio: "08:00", fim: "18:00" },
+    "Quinta-feira": { aberto: true, inicio: "08:00", fim: "18:00" },
+    "Sexta-feira": { aberto: true, inicio: "08:00", fim: "18:00" },
+    Sábado: { aberto: true, inicio: "08:00", fim: "14:00" },
+    Domingo: { aberto: false, inicio: "08:00", fim: "18:00" },
   });
 
   const dias = [
@@ -87,10 +60,12 @@ function Configuracoes() {
     "Sábado",
   ];
 
-  // Carregar os dados da barbearia do usuário autenticado.
   useEffect(() => {
     async function carregarDadosBarbearia() {
       try {
+        setCarregandoBarbearia(true);
+        setErroInformacoes("");
+
         const barbearia = await buscarMinhaBarbearia();
 
         setBarbeariaId(barbearia.id);
@@ -109,11 +84,11 @@ function Configuracoes() {
     carregarDadosBarbearia();
   }, []);
 
-  // Carregar os horários de funcionamento salvos no Supabase.
   useEffect(() => {
     async function carregarHorarios() {
       try {
         setCarregandoHorarios(true);
+        setErroHorarios("");
 
         const barbearia = await buscarMinhaBarbearia();
 
@@ -133,24 +108,22 @@ function Configuracoes() {
 
         const dados = data as HorarioBanco[];
 
-        setHorarios((horariosAtuais) => {
-          const novosHorarios = { ...horariosAtuais };
+        setHorarios((atuais) => {
+          const novos = { ...atuais };
 
           dados.forEach((horario) => {
             const dia = dias[horario.dia_semana];
 
-            if (!dia) {
-              return;
-            }
+            if (!dia) return;
 
-            novosHorarios[dia] = {
+            novos[dia] = {
               aberto: horario.aberto,
               inicio: horario.hora_inicio?.slice(0, 5) ?? "08:00",
               fim: horario.hora_fim?.slice(0, 5) ?? "18:00",
             };
           });
 
-          return novosHorarios;
+          return novos;
         });
       } catch (error) {
         console.error("Erro ao carregar horários:", error);
@@ -163,54 +136,10 @@ function Configuracoes() {
     carregarHorarios();
   }, []);
 
-  // Salvar os horários de funcionamento no Supabase.
-  async function salvarHorarios() {
-    setSalvandoHorarios(true);
-    setMensagemHorarios("");
-    setErroHorarios("");
+  const linkPublico = slugBarbearia
+    ? `${window.location.origin}/barbearia/${slugBarbearia}`
+    : "";
 
-    try {
-      const barbearia = await buscarMinhaBarbearia();
-
-      for (let i = 0; i < dias.length; i++) {
-        const dia = dias[i];
-        const horario = horarios[dia];
-
-        if (horario.aberto && horario.inicio >= horario.fim) {
-          setErroHorarios(
-            `Confira os horários de ${dia}: o horário de fechamento precisa ser posterior ao de abertura.`,
-          );
-          return;
-        }
-
-        const { error } = await supabase.from("horarios_funcionamento").upsert(
-          {
-            barbearia_id: barbearia.id,
-            dia_semana: i,
-            aberto: horario.aberto,
-            hora_inicio: horario.aberto ? horario.inicio : null,
-            hora_fim: horario.aberto ? horario.fim : null,
-          },
-          {
-            onConflict: "barbearia_id,dia_semana",
-          },
-        );
-
-        if (error) {
-          throw error;
-        }
-      }
-
-      setMensagemHorarios("Horários salvos com sucesso!");
-    } catch (error) {
-      console.error("Erro ao salvar horários:", error);
-      setErroHorarios("Não foi possível salvar os horários. Tente novamente.");
-    } finally {
-      setSalvandoHorarios(false);
-    }
-  }
-
-  // Salvar o nome da barbearia no Supabase.
   async function salvarInformacoes() {
     if (!barbeariaId) {
       setErroInformacoes("Não foi possível identificar sua barbearia.");
@@ -234,9 +163,7 @@ function Configuracoes() {
         .update({ nome: nome.trim() })
         .eq("id", barbeariaId);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setNome(nome.trim());
       setMensagemInformacoes("Nome da barbearia salvo com sucesso!");
@@ -248,12 +175,6 @@ function Configuracoes() {
     }
   }
 
-  // Montar o link com o domínio atual e o slug da barbearia autenticada.
-  const linkPublico = slugBarbearia
-    ? `${window.location.origin}/barbearia/${slugBarbearia}`
-    : "";
-
-  // Copiar o link público de agendamento.
   async function copiarLink() {
     setErroLink("");
     setCopiado(false);
@@ -274,20 +195,75 @@ function Configuracoes() {
     }
   }
 
+  async function salvarHorarios() {
+    setSalvandoHorarios(true);
+    setMensagemHorarios("");
+    setErroHorarios("");
+
+    try {
+      const barbearia = await buscarMinhaBarbearia();
+
+      for (let i = 0; i < dias.length; i++) {
+        const dia = dias[i];
+        const horario = horarios[dia];
+
+        if (horario.aberto && horario.inicio >= horario.fim) {
+          setErroHorarios(
+            `Confira os horários de ${dia}: o fechamento precisa ser posterior à abertura.`,
+          );
+          return;
+        }
+
+        const { error } = await supabase.from("horarios_funcionamento").upsert(
+          {
+            barbearia_id: barbearia.id,
+            dia_semana: i,
+            aberto: horario.aberto,
+            hora_inicio: horario.aberto ? horario.inicio : null,
+            hora_fim: horario.aberto ? horario.fim : null,
+          },
+          {
+            onConflict: "barbearia_id,dia_semana",
+          },
+        );
+
+        if (error) throw error;
+      }
+
+      setMensagemHorarios("Horários salvos com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar horários:", error);
+      setErroHorarios("Não foi possível salvar os horários. Tente novamente.");
+    } finally {
+      setSalvandoHorarios(false);
+    }
+  }
+
+  function atualizarHorario(dia: string, alteracoes: Partial<Horario>) {
+    setHorarios((atuais) => ({
+      ...atuais,
+      [dia]: {
+        ...atuais[dia],
+        ...alteracoes,
+      },
+    }));
+
+    setMensagemHorarios("");
+    setErroHorarios("");
+  }
+
   return (
     <div className="p-8">
       <header>
         <p className="text-zinc-400">
           Gerencie as informações da sua barbearia
         </p>
-
         <h1 className="mt-1 text-3xl font-bold">Configurações</h1>
       </header>
 
       {/* Informações da barbearia */}
       <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="text-xl font-semibold">Informações da barbearia</h2>
-
         <p className="mt-1 text-sm text-zinc-500">
           Essas informações serão exibidas para seus clientes.
         </p>
@@ -303,7 +279,6 @@ function Configuracoes() {
                 <label className="mb-2 block text-sm text-zinc-300">
                   Nome da barbearia
                 </label>
-
                 <input
                   type="text"
                   value={nome}
@@ -316,11 +291,11 @@ function Configuracoes() {
                 <label className="mb-2 block text-sm text-zinc-300">
                   Telefone
                 </label>
-
                 <input
                   type="tel"
                   value={telefone}
                   onChange={(e) => setTelefone(e.target.value)}
+                  placeholder="Informe o telefone da barbearia"
                   className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none transition focus:border-amber-500"
                 />
               </div>
@@ -330,7 +305,6 @@ function Configuracoes() {
               <label className="mb-2 block text-sm text-zinc-300">
                 Descrição
               </label>
-
               <textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
@@ -342,7 +316,7 @@ function Configuracoes() {
             <button
               type="button"
               onClick={salvarInformacoes}
-              disabled={salvandoInformacoes}
+              disabled={salvandoInformacoes || carregandoBarbearia}
               className="mt-5 flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save size={18} />
@@ -354,7 +328,6 @@ function Configuracoes() {
                 {mensagemInformacoes}
               </p>
             )}
-
             {erroInformacoes && (
               <p className="mt-3 text-sm text-red-400">{erroInformacoes}</p>
             )}
@@ -371,7 +344,6 @@ function Configuracoes() {
 
           <div>
             <h2 className="text-xl font-semibold">Link de agendamento</h2>
-
             <p className="mt-1 text-sm text-zinc-500">
               Compartilhe este link para seus clientes agendarem um horário.
             </p>
@@ -413,7 +385,6 @@ function Configuracoes() {
       {/* Horários de funcionamento */}
       <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
         <h2 className="text-xl font-semibold">Horário de funcionamento</h2>
-
         <p className="mt-1 text-sm text-zinc-500">
           Defina os dias e horários em que sua barbearia estará disponível.
         </p>
@@ -436,7 +407,6 @@ function Configuracoes() {
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="font-medium">{dia}</p>
-
                         <p
                           className={`mt-1 text-xs ${
                             horario.aberto ? "text-green-400" : "text-zinc-600"
@@ -449,17 +419,11 @@ function Configuracoes() {
                       <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => {
-                            setHorarios((horariosAtuais) => ({
-                              ...horariosAtuais,
-                              [dia]: {
-                                ...horariosAtuais[dia],
-                                aberto: !horariosAtuais[dia].aberto,
-                              },
-                            }));
-                            setMensagemHorarios("");
-                            setErroHorarios("");
-                          }}
+                          onClick={() =>
+                            atualizarHorario(dia, {
+                              aberto: !horario.aberto,
+                            })
+                          }
                           className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                             horario.aberto
                               ? "bg-green-500/10 text-green-400 hover:bg-green-500/20"
@@ -475,17 +439,11 @@ function Configuracoes() {
                               type="time"
                               aria-label={`Abertura ${dia}`}
                               value={horario.inicio}
-                              onChange={(e) => {
-                                setHorarios((horariosAtuais) => ({
-                                  ...horariosAtuais,
-                                  [dia]: {
-                                    ...horariosAtuais[dia],
-                                    inicio: e.target.value,
-                                  },
-                                }));
-                                setMensagemHorarios("");
-                                setErroHorarios("");
-                              }}
+                              onChange={(e) =>
+                                atualizarHorario(dia, {
+                                  inicio: e.target.value,
+                                })
+                              }
                               className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white outline-none focus:border-amber-500"
                             />
 
@@ -495,17 +453,11 @@ function Configuracoes() {
                               type="time"
                               aria-label={`Fechamento ${dia}`}
                               value={horario.fim}
-                              onChange={(e) => {
-                                setHorarios((horariosAtuais) => ({
-                                  ...horariosAtuais,
-                                  [dia]: {
-                                    ...horariosAtuais[dia],
-                                    fim: e.target.value,
-                                  },
-                                }));
-                                setMensagemHorarios("");
-                                setErroHorarios("");
-                              }}
+                              onChange={(e) =>
+                                atualizarHorario(dia, {
+                                  fim: e.target.value,
+                                })
+                              }
                               className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-white outline-none focus:border-amber-500"
                             />
                           </>
@@ -530,7 +482,6 @@ function Configuracoes() {
             {mensagemHorarios && (
               <p className="mt-3 text-sm text-green-400">{mensagemHorarios}</p>
             )}
-
             {erroHorarios && (
               <p className="mt-3 text-sm text-red-400">{erroHorarios}</p>
             )}
