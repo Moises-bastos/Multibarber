@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-
 import {
   CalendarDays,
   Check,
@@ -13,7 +12,6 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-
 import { supabase } from "../../lib/supabase";
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
 
@@ -48,14 +46,12 @@ function Agenda() {
   const [diaSelecionado, setDiaSelecionado] = useState(0);
   const [agendamentoSelecionado, setAgendamentoSelecionado] =
     useState<Agendamento | null>(null);
-
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [dias, setDias] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
-
+  const [erroAgenda, setErroAgenda] = useState("");
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([]);
   const [carregandoBloqueios, setCarregandoBloqueios] = useState(false);
-
   const [modalBloqueioAberto, setModalBloqueioAberto] = useState(false);
   const [dataBloqueio, setDataBloqueio] = useState("");
   const [tipoBloqueio, setTipoBloqueio] = useState<TipoBloqueio>("horario");
@@ -85,6 +81,7 @@ function Agenda() {
   async function carregarAgendamentos() {
     try {
       setCarregando(true);
+      setErroAgenda("");
 
       const barbearia = await buscarMinhaBarbearia();
 
@@ -138,6 +135,9 @@ function Agenda() {
       setAgendamentos(dados);
     } catch (error) {
       console.error("ERRO AO CARREGAR AGENDA:", error);
+      setErroAgenda(
+        "Não foi possível atualizar os agendamentos. Tente novamente.",
+      );
     } finally {
       setCarregando(false);
     }
@@ -188,7 +188,6 @@ function Agenda() {
 
   useEffect(() => {
     const proximosDias = gerarProximosDias();
-
     setDias(proximosDias);
     carregarAgendamentos();
   }, []);
@@ -386,14 +385,13 @@ function Agenda() {
   const horariosDoDia = agendamentosDoDia;
 
   return (
-    <div className="min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 md:p-8">
+    <div className="mx-auto w-full min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 lg:p-8">
       {/* Cabeçalho */}
       <header className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <p className="break-words text-sm text-zinc-400 sm:text-base">
             Organize os horários da sua barbearia
           </p>
-
           <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Agenda</h1>
         </div>
 
@@ -409,17 +407,28 @@ function Agenda() {
 
           <button
             type="button"
-            onClick={carregarAgendamentos}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white sm:w-auto"
+            onClick={async () => {
+              await carregarAgendamentos();
+              if (dataAtual) {
+                await carregarBloqueios(dataAtual);
+              }
+            }}
+            disabled={carregando || carregandoBloqueios}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
-            <RefreshCw size={16} className="shrink-0" />
-            Atualizar
+            <RefreshCw
+              size={16}
+              className={`shrink-0 ${
+                carregando || carregandoBloqueios ? "animate-spin" : ""
+              }`}
+            />
+            {carregando || carregandoBloqueios ? "Atualizando..." : "Atualizar"}
           </button>
         </div>
       </header>
 
       {/* Seleção dos próximos sete dias */}
-      <div className="mt-6 grid grid-cols-2 gap-2 sm:mt-8 sm:gap-3 md:grid-cols-4 lg:grid-cols-7">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:gap-3 md:grid-cols-4 lg:grid-cols-7">
         {dias.map((data, index) => {
           const diaSemana = primeiraMaiuscula(nomeDiaSemana(data));
 
@@ -442,6 +451,102 @@ function Agenda() {
           );
         })}
       </div>
+
+      {erroAgenda && (
+        <div
+          role="alert"
+          className="mt-5 rounded-xl border border-red-900/50 bg-red-500/10 p-4 text-sm text-red-300"
+        >
+          {erroAgenda}
+        </div>
+      )}
+
+      {/* Carregamento */}
+      {carregando && (
+        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-500 sm:p-8">
+          Carregando agendamentos...
+        </div>
+      )}
+
+      {/* Lista de agendamentos: agora aparece antes do resumo e dos bloqueios */}
+      {!carregando && (
+        <div className="mt-4 min-w-0 space-y-3 sm:mt-5">
+          {horariosDoDia.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-6 text-center sm:p-10">
+              <Clock size={32} className="mx-auto text-zinc-700" />
+              <p className="mt-3 font-medium text-zinc-500">
+                Nenhum agendamento
+              </p>
+              <p className="mt-1 text-sm text-zinc-600">
+                Não existem atendimentos marcados para este dia.
+              </p>
+            </div>
+          ) : (
+            horariosDoDia.map((agendamento) => (
+              <div
+                key={agendamento.id}
+                className={`flex min-w-0 flex-col gap-4 rounded-xl border p-4 sm:p-5 md:flex-row md:items-center md:justify-between ${
+                  agendamento.status === "cancelado"
+                    ? "border-red-900/30 bg-zinc-950 opacity-60"
+                    : agendamento.status === "agendado"
+                      ? "border-amber-500/40 bg-amber-500/5"
+                      : "border-zinc-800 bg-zinc-900"
+                }`}
+              >
+                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
+                  <span className="text-lg font-semibold sm:w-16">
+                    {agendamento.horario}
+                  </span>
+
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
+                      <UserRound size={18} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="break-words font-medium">
+                        {agendamento.cliente.nome}
+                      </p>
+
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-sm text-zinc-500">
+                        <Scissors size={14} className="shrink-0" />
+                        <span className="break-words">
+                          {agendamento.servico.nome}
+                        </span>
+                        <span>•</span>
+                        <span>{formatarPreco(agendamento.servico.preco)}</span>
+                        <span>•</span>
+                        <span>{agendamento.servico.duracao} min</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {agendamento.status === "agendado" ? (
+                  <button
+                    type="button"
+                    onClick={() => setAgendamentoSelecionado(agendamento)}
+                    className="flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-green-500/10 transition hover:bg-green-400 md:w-auto"
+                  >
+                    <Check size={17} />
+                    Confirmar atendimento
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAgendamentoSelecionado(agendamento)}
+                    className={`self-start rounded-full px-3 py-2 text-sm transition hover:opacity-80 sm:self-auto ${getStatusClasses(
+                      agendamento.status,
+                    )}`}
+                  >
+                    {getStatusTexto(agendamento.status)}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Resumo do dia */}
       {dataAtual && (
@@ -543,93 +648,6 @@ function Agenda() {
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Carregamento */}
-      {carregando && (
-        <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center text-zinc-500 sm:p-8">
-          Carregando agendamentos...
-        </div>
-      )}
-
-      {/* Lista de agendamentos */}
-      {!carregando && (
-        <div className="mt-5 min-w-0 space-y-3 sm:mt-6">
-          {horariosDoDia.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-6 text-center sm:p-10">
-              <Clock size={32} className="mx-auto text-zinc-700" />
-
-              <p className="mt-3 font-medium text-zinc-500">
-                Nenhum agendamento
-              </p>
-
-              <p className="mt-1 text-sm text-zinc-600">
-                Não existem atendimentos marcados para este dia.
-              </p>
-            </div>
-          ) : (
-            horariosDoDia.map((agendamento) => (
-              <div
-                key={agendamento.id}
-                className={`flex min-w-0 flex-col gap-4 rounded-xl border p-4 sm:p-5 md:flex-row md:items-center md:justify-between ${
-                  agendamento.status === "cancelado"
-                    ? "border-red-900/30 bg-zinc-950 opacity-60"
-                    : agendamento.status === "agendado"
-                      ? "border-amber-500/40 bg-amber-500/5"
-                      : "border-zinc-800 bg-zinc-900"
-                }`}
-              >
-                <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
-                  <span className="text-lg font-semibold sm:w-16">
-                    {agendamento.horario}
-                  </span>
-
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
-                      <UserRound size={18} />
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="break-words font-medium">
-                        {agendamento.cliente.nome}
-                      </p>
-
-                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-sm text-zinc-500">
-                        <Scissors size={14} className="shrink-0" />
-                        <span className="break-words">
-                          {agendamento.servico.nome}
-                        </span>
-                        <span>•</span>
-                        <span>{formatarPreco(agendamento.servico.preco)}</span>
-                        <span>•</span>
-                        <span>{agendamento.servico.duracao} min</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {agendamento.status === "agendado" ? (
-                  <button
-                    type="button"
-                    onClick={() => setAgendamentoSelecionado(agendamento)}
-                    className="flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-green-500/10 transition hover:bg-green-400 md:w-auto"
-                  >
-                    <Check size={17} />
-                    Confirmar atendimento
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setAgendamentoSelecionado(agendamento)}
-                    className={`self-start rounded-full px-3 py-2 text-sm transition hover:opacity-80 sm:self-auto ${getStatusClasses(agendamento.status)}`}
-                  >
-                    {getStatusTexto(agendamento.status)}
-                  </button>
-                )}
-              </div>
-            ))
           )}
         </div>
       )}

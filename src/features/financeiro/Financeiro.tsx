@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-
 import {
   Wallet,
   TrendingUp,
@@ -8,7 +7,6 @@ import {
   ArrowUpRight,
   RefreshCw,
 } from "lucide-react";
-
 import { supabase } from "../../lib/supabase";
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
 
@@ -22,11 +20,8 @@ type Atendimento = {
 
 function Financeiro() {
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
-
   const [periodo, setPeriodo] = useState("mes");
-
   const [carregando, setCarregando] = useState(true);
-
   const [erro, setErro] = useState("");
 
   useEffect(() => {
@@ -40,35 +35,27 @@ function Financeiro() {
 
       const barbearia = await buscarMinhaBarbearia();
 
-      /*
-       * Financeiro considera apenas
-       * atendimentos concluídos.
-       */
       const { data, error } = await supabase
         .from("agendamentos")
         .select(
           `
-                        id,
-                        data,
-                        horario,
-                        status,
-                        cliente:clientes(
-                            nome
-                        ),
-                        servico:servicos(
-                            nome,
-                            preco
-                        )
-                    `,
+          id,
+          data,
+          horario,
+          status,
+          cliente:clientes(
+            nome
+          ),
+          servico:servicos(
+            nome,
+            preco
+          )
+        `,
         )
         .eq("barbearia_id", barbearia.id)
         .eq("status", "confirmado")
-        .order("data", {
-          ascending: false,
-        })
-        .order("horario", {
-          ascending: false,
-        });
+        .order("data", { ascending: false })
+        .order("horario", { ascending: false });
 
       if (error) {
         throw error;
@@ -76,45 +63,30 @@ function Financeiro() {
 
       const dados: Atendimento[] = (data ?? []).map((item: any) => ({
         id: item.id,
-
         cliente: item.cliente.nome,
-
         servico: item.servico.nome,
-
         valor: Number(item.servico.preco),
-
         data: item.data,
       }));
 
       setAtendimentos(dados);
     } catch (error) {
       console.error("ERRO AO CARREGAR FINANCEIRO:", error);
-
       setErro("Não foi possível carregar os dados financeiros.");
     } finally {
       setCarregando(false);
     }
   }
 
-  /*
-   * Data de hoje no formato YYYY-MM-DD.
-   */
   function dataHoje() {
     const hoje = new Date();
-
     const ano = hoje.getFullYear();
-
     const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-
     const dia = String(hoje.getDate()).padStart(2, "0");
 
     return `${ano}-${mes}-${dia}`;
   }
 
-  /*
-   * Filtra os atendimentos conforme
-   * o período selecionado.
-   */
   function atendimentosDoPeriodo() {
     const hoje = new Date();
 
@@ -128,11 +100,9 @@ function Financeiro() {
 
     if (periodo === "semana") {
       const inicioSemana = new Date(hoje);
-
       const diaSemana = inicioSemana.getDay();
 
       inicioSemana.setDate(hoje.getDate() - diaSemana);
-
       inicioSemana.setHours(0, 0, 0, 0);
 
       return atendimentos.filter((atendimento) => {
@@ -142,9 +112,6 @@ function Financeiro() {
       });
     }
 
-    /*
-     * Mês atual.
-     */
     return atendimentos.filter((atendimento) => {
       const [ano, mes] = atendimento.data.split("-").map(Number);
 
@@ -181,9 +148,6 @@ function Financeiro() {
     return new Date(ano, mes - 1, dia).toLocaleDateString("pt-BR");
   }
 
-  /*
-   * Calcula o faturamento por serviço.
-   */
   const servicosResumo = atendimentosFiltrados.reduce(
     (acumulado, atendimento) => {
       const existente = acumulado.find(
@@ -192,7 +156,6 @@ function Financeiro() {
 
       if (existente) {
         existente.valor += atendimento.valor;
-
         existente.quantidade += 1;
       } else {
         acumulado.push({
@@ -217,57 +180,62 @@ function Financeiro() {
       : 0;
 
   return (
-    <div className="p-8">
+    <div className="mx-auto w-full min-w-0 max-w-full p-4 sm:p-6 lg:p-8">
       {/* Cabeçalho */}
-      <header className="flex items-end justify-between">
-        <div>
-          <p className="text-zinc-400">
+      <header className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="break-words text-sm text-zinc-400 sm:text-base">
             Acompanhe o desempenho financeiro da sua barbearia
           </p>
 
-          <h1 className="mt-1 text-3xl font-bold">Financeiro</h1>
+          <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Financeiro</h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
           <button
             type="button"
             onClick={carregarFinanceiro}
-            className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white"
+            disabled={carregando}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
-            <RefreshCw size={16} />
-            Atualizar
+            <RefreshCw size={16} className={carregando ? "animate-spin" : ""} />
+
+            {carregando ? "Atualizando..." : "Atualizar"}
           </button>
 
           <select
             value={periodo}
             onChange={(e) => setPeriodo(e.target.value)}
-            className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-amber-500"
+            aria-label="Selecionar período financeiro"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-amber-500 sm:w-auto"
           >
             <option value="hoje">Hoje</option>
-
             <option value="semana">Esta semana</option>
-
             <option value="mes">Este mês</option>
           </select>
         </div>
       </header>
 
+      {/* Erro */}
       {erro && (
-        <div className="mt-6 rounded-xl border border-red-900/50 bg-red-500/10 p-4 text-sm text-red-400">
+        <div
+          role="alert"
+          className="mt-6 rounded-xl border border-red-900/50 bg-red-500/10 p-4 text-sm text-red-400"
+        >
           {erro}
         </div>
       )}
 
       {carregando ? (
-        <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-10 text-center">
+        <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center sm:p-10">
           <p className="text-zinc-400">Carregando financeiro...</p>
         </div>
       ) : (
         <>
-          {/* Cards */}
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {/* Cards de indicadores */}
+          <div className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:mt-7 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
             {/* Faturamento */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6">
               <div className="flex items-center justify-between">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
                   <Wallet size={22} />
@@ -278,22 +246,22 @@ function Financeiro() {
 
               <p className="mt-5 text-sm text-zinc-500">Faturamento</p>
 
-              <p className="mt-1 text-2xl font-bold">
+              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
                 {formatarMoeda(faturamentoTotal)}
               </p>
 
               <p className="mt-2 text-xs text-zinc-500">Período selecionado</p>
             </div>
 
-            {/* Hoje */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            {/* Faturamento de hoje */}
+            <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-green-500/10 text-green-400">
                 <CalendarDays size={22} />
               </div>
 
               <p className="mt-5 text-sm text-zinc-500">Faturamento hoje</p>
 
-              <p className="mt-1 text-2xl font-bold">
+              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
                 {formatarMoeda(faturamentoHoje)}
               </p>
 
@@ -302,15 +270,15 @@ function Financeiro() {
               </p>
             </div>
 
-            {/* Atendimentos */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            {/* Quantidade de atendimentos */}
+            <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
                 <Scissors size={22} />
               </div>
 
               <p className="mt-5 text-sm text-zinc-500">Atendimentos</p>
 
-              <p className="mt-1 text-2xl font-bold">
+              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
                 {quantidadeAtendimentos}
               </p>
 
@@ -318,14 +286,14 @@ function Financeiro() {
             </div>
 
             {/* Ticket médio */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+            <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400">
                 <TrendingUp size={22} />
               </div>
 
               <p className="mt-5 text-sm text-zinc-500">Ticket médio</p>
 
-              <p className="mt-1 text-2xl font-bold">
+              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
                 {formatarMoeda(ticketMedio)}
               </p>
 
@@ -336,13 +304,15 @@ function Financeiro() {
           </div>
 
           {/* Conteúdo inferior */}
-          <div className="mt-6 grid gap-6 xl:grid-cols-3">
+          <div className="mt-5 grid min-w-0 gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-3">
             {/* Atendimentos recentes */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 xl:col-span-2">
+            <section className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6 xl:col-span-2">
               <div>
-                <h2 className="text-xl font-semibold">Atendimentos recentes</h2>
+                <h2 className="break-words text-lg font-semibold sm:text-xl">
+                  Atendimentos recentes
+                </h2>
 
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 break-words text-sm text-zinc-500">
                   Serviços que geraram faturamento
                 </p>
               </div>
@@ -351,24 +321,26 @@ function Financeiro() {
                 {atendimentosFiltrados.slice(0, 10).map((atendimento) => (
                   <div
                     key={atendimento.id}
-                    className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+                    className="flex min-w-0 flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                    <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
                         <Scissors size={18} />
                       </div>
 
-                      <div>
-                        <p className="font-medium">{atendimento.cliente}</p>
+                      <div className="min-w-0">
+                        <p className="break-words font-medium">
+                          {atendimento.cliente}
+                        </p>
 
-                        <p className="mt-1 text-sm text-zinc-500">
+                        <p className="mt-1 break-words text-sm text-zinc-500">
                           {atendimento.servico}
                         </p>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <p className="font-semibold text-green-400">
+                    <div className="text-left sm:shrink-0 sm:text-right">
+                      <p className="break-words font-semibold text-green-400">
                         {formatarMoeda(atendimento.valor)}
                       </p>
 
@@ -380,7 +352,7 @@ function Financeiro() {
                 ))}
 
                 {atendimentosFiltrados.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-8 text-center">
+                  <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-6 text-center sm:p-8">
                     <Scissors size={32} className="mx-auto text-zinc-700" />
 
                     <p className="mt-3 text-zinc-500">
@@ -391,9 +363,11 @@ function Financeiro() {
               </div>
             </section>
 
-            {/* Resumo */}
-            <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-              <h2 className="text-xl font-semibold">Resumo</h2>
+            {/* Resumo por serviço */}
+            <section className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6">
+              <h2 className="break-words text-lg font-semibold sm:text-xl">
+                Resumo
+              </h2>
 
               <p className="mt-1 text-sm text-zinc-500">
                 Distribuição dos serviços
@@ -412,11 +386,13 @@ function Financeiro() {
                         : 0;
 
                     return (
-                      <div key={servico.nome}>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-zinc-400">{servico.nome}</span>
+                      <div key={servico.nome} className="min-w-0">
+                        <div className="flex min-w-0 items-start justify-between gap-3 text-sm">
+                          <span className="min-w-0 break-words text-zinc-400">
+                            {servico.nome}
+                          </span>
 
-                          <span className="font-medium">
+                          <span className="shrink-0 font-medium">
                             {formatarMoeda(servico.valor)}
                           </span>
                         </div>
@@ -424,9 +400,7 @@ function Financeiro() {
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
                           <div
                             className="h-full rounded-full bg-amber-500"
-                            style={{
-                              width: `${porcentagem}%`,
-                            }}
+                            style={{ width: `${porcentagem}%` }}
                           />
                         </div>
 

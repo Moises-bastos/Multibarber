@@ -10,6 +10,8 @@ import {
   Scissors,
   User,
   X,
+  Search,
+  RefreshCw,
 } from "lucide-react";
 
 import { supabase } from "../../../lib/supabase";
@@ -39,6 +41,15 @@ type Barbearia = {
 type AgendamentoCriado = {
   id: number;
   codigo_cancelamento: string;
+};
+
+type AgendamentoConsultado = {
+  agendamento_id: number;
+  servico: string;
+  data: string;
+  horario: string;
+  status: string;
+  preco: number;
 };
 
 type HorarioFuncionamento = {
@@ -74,6 +85,18 @@ function PublicBarber() {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
 
+  const [telefoneConsulta, setTelefoneConsulta] = useState("");
+  const [agendamentosConsultados, setAgendamentosConsultados] = useState<
+    AgendamentoConsultado[]
+  >([]);
+  const [consultouAgendamentos, setConsultouAgendamentos] = useState(false);
+  const [consultandoAgendamentos, setConsultandoAgendamentos] = useState(false);
+  const [cancelandoConsultaId, setCancelandoConsultaId] = useState<
+    number | null
+  >(null);
+  const [erroConsulta, setErroConsulta] = useState("");
+  const [mensagemConsulta, setMensagemConsulta] = useState("");
+
   const [horariosOcupados, setHorariosOcupados] = useState<HorarioOcupado[]>(
     [],
   );
@@ -89,7 +112,6 @@ function PublicBarber() {
 
   const [carregando, setCarregando] = useState(true);
   const [carregandoFuncionamento, setCarregandoFuncionamento] = useState(true);
-
   const [carregandoHorarios, setCarregandoHorarios] = useState(false);
 
   const [agendando, setAgendando] = useState(false);
@@ -97,12 +119,6 @@ function PublicBarber() {
 
   const [cancelado, setCancelado] = useState(false);
   const [erro, setErro] = useState("");
-
-  /*
-  |--------------------------------------------------------------------------
-  | NOMES DOS DIAS
-  |--------------------------------------------------------------------------
-  */
 
   const nomesDias = [
     "Domingo",
@@ -114,23 +130,10 @@ function PublicBarber() {
     "Sábado",
   ];
 
-  /*
-  |--------------------------------------------------------------------------
-  | CONVERTER HORÁRIO PARA MINUTOS
-  |--------------------------------------------------------------------------
-  */
-
   function horarioParaMinutos(horario: string): number {
     const [hora, minuto] = horario.slice(0, 5).split(":").map(Number);
-
     return hora * 60 + minuto;
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | FORMATAR MINUTOS COMO HH:MM
-  |--------------------------------------------------------------------------
-  */
 
   function minutosParaHorario(minutos: number): string {
     const hora = Math.floor(minutos / 60);
@@ -142,28 +145,18 @@ function PublicBarber() {
     )}`;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | DIAS
-  |--------------------------------------------------------------------------
-  */
-
   function gerarDias(): Dia[] {
     const dias: Dia[] = [];
-
     const hoje = new Date();
 
     for (let i = 0; i < 7; i++) {
       const data = new Date(hoje);
-
       data.setDate(hoje.getDate() + i);
 
       const ano = data.getFullYear();
       const mes = String(data.getMonth() + 1).padStart(2, "0");
       const dia = String(data.getDate()).padStart(2, "0");
-
       const dataFormatada = `${ano}-${mes}-${dia}`;
-
       const diaSemana = data.getDay();
 
       const funcionamento = horariosFuncionamento.find(
@@ -182,12 +175,6 @@ function PublicBarber() {
 
   const dias = gerarDias();
 
-  /*
-  |--------------------------------------------------------------------------
-  | VERIFICAR SE UM HORÁRIO BATE COM OUTRO INTERVALO
-  |--------------------------------------------------------------------------
-  */
-
   function existeConflito(
     inicioCandidato: number,
     fimCandidato: number,
@@ -197,39 +184,20 @@ function PublicBarber() {
     return inicioCandidato < fimOcupado && fimCandidato > inicioOcupado;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | VERIFICAR SE HORÁRIO ESTÁ BLOQUEADO
-  |--------------------------------------------------------------------------
-  */
-
   function horarioEstaBloqueado(
     inicioCandidato: number,
     fimCandidato: number,
   ): boolean {
     return bloqueiosAgenda.some((bloqueio) => {
-      /*
-      |----------------------------------------------------------------------
-      | DIA INTEIRO
-      |----------------------------------------------------------------------
-      */
-
       if (bloqueio.dia_inteiro) {
         return true;
       }
-
-      /*
-      |----------------------------------------------------------------------
-      | BLOQUEIO POR HORÁRIO
-      |----------------------------------------------------------------------
-      */
 
       if (!bloqueio.hora_inicio || !bloqueio.hora_fim) {
         return false;
       }
 
       const inicioBloqueio = horarioParaMinutos(bloqueio.hora_inicio);
-
       const fimBloqueio = horarioParaMinutos(bloqueio.hora_fim);
 
       return existeConflito(
@@ -241,19 +209,12 @@ function PublicBarber() {
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | VERIFICAR SE HORÁRIO ESTÁ OCUPADO POR OUTRO AGENDAMENTO
-  |--------------------------------------------------------------------------
-  */
-
   function horarioEstaOcupado(
     inicioCandidato: number,
     fimCandidato: number,
   ): boolean {
     return horariosOcupados.some((agendamento) => {
       const inicioOcupado = horarioParaMinutos(agendamento.horario);
-
       const fimOcupado = inicioOcupado + agendamento.duracao;
 
       return existeConflito(
@@ -265,19 +226,12 @@ function PublicBarber() {
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | HORÁRIOS DISPONÍVEIS
-  |--------------------------------------------------------------------------
-  */
-
   function gerarHorariosDisponiveis(): string[] {
     if (!diaSelecionado || !servicoSelecionado) {
       return [];
     }
 
     const data = new Date(`${diaSelecionado.data}T12:00:00`);
-
     const diaSemana = data.getDay();
 
     const funcionamento = horariosFuncionamento.find(
@@ -294,32 +248,8 @@ function PublicBarber() {
     }
 
     const inicio = horarioParaMinutos(funcionamento.hora_inicio);
-
     const fim = horarioParaMinutos(funcionamento.hora_fim);
-
     const horariosGerados: string[] = [];
-
-    /*
-    |----------------------------------------------------------------------
-    | GRADE FIXA
-    |
-    | O sistema trabalha de 5 em 5 minutos.
-    |
-    | A duração do serviço NÃO altera a grade.
-    |
-    | Serviço de 5 min:
-    | 08:00, 08:05, 08:10...
-    |
-    | Serviço de 15 min:
-    | 08:00, 08:05, 08:10...
-    |
-    | Serviço de 60 min:
-    | 08:00, 08:05, 08:10...
-    |
-    | Depois verificamos se a duração inteira cabe.
-    |----------------------------------------------------------------------
-    */
-
     const INTERVALO_GRADE = 5;
 
     for (
@@ -329,27 +259,11 @@ function PublicBarber() {
     ) {
       const fimDoServico = minutos + servicoSelecionado.duracao;
 
-      /*
-      |--------------------------------------------------------------------
-      | VERIFICA ATENDIMENTOS EXISTENTES
-      |--------------------------------------------------------------------
-      */
-
-      const ocupado = horarioEstaOcupado(minutos, fimDoServico);
-
-      if (ocupado) {
+      if (horarioEstaOcupado(minutos, fimDoServico)) {
         continue;
       }
 
-      /*
-      |--------------------------------------------------------------------
-      | VERIFICA BLOQUEIOS DO BARBEIRO
-      |--------------------------------------------------------------------
-      */
-
-      const bloqueado = horarioEstaBloqueado(minutos, fimDoServico);
-
-      if (bloqueado) {
+      if (horarioEstaBloqueado(minutos, fimDoServico)) {
         continue;
       }
 
@@ -359,14 +273,9 @@ function PublicBarber() {
     return horariosGerados;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGAR BARBEARIA
-  |--------------------------------------------------------------------------
-  */
-
   useEffect(() => {
     carregarBarbearia();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   async function carregarBarbearia() {
@@ -393,12 +302,10 @@ function PublicBarber() {
         return;
       }
 
-      const barbeariaEncontrada = data[0];
-
+      const barbeariaEncontrada = data[0] as Barbearia;
       setBarbearia(barbeariaEncontrada);
 
       await carregarHorariosFuncionamento(barbeariaEncontrada.id);
-
       await carregarServicos(barbeariaEncontrada.id);
     } catch (error) {
       console.error("ERRO AO CARREGAR BARBEARIA:", error);
@@ -412,12 +319,6 @@ function PublicBarber() {
       setCarregando(false);
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGAR HORÁRIOS DE FUNCIONAMENTO
-  |--------------------------------------------------------------------------
-  */
 
   async function carregarHorariosFuncionamento(barbeariaId: string) {
     try {
@@ -434,21 +335,14 @@ function PublicBarber() {
         throw error;
       }
 
-      setHorariosFuncionamento(data || []);
+      setHorariosFuncionamento((data || []) as HorarioFuncionamento[]);
     } catch (error) {
       console.error("ERRO AO CARREGAR HORÁRIOS DE FUNCIONAMENTO:", error);
-
       throw error;
     } finally {
       setCarregandoFuncionamento(false);
     }
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGAR SERVIÇOS
-  |--------------------------------------------------------------------------
-  */
 
   async function carregarServicos(barbeariaId: string) {
     const { data, error } = await supabase
@@ -462,14 +356,8 @@ function PublicBarber() {
       throw error;
     }
 
-    setServicos(data || []);
+    setServicos((data || []) as Servico[]);
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGAR HORÁRIOS OCUPADOS
-  |--------------------------------------------------------------------------
-  */
 
   async function carregarHorariosOcupados(data: string) {
     if (!barbearia || !servicoSelecionado) {
@@ -509,12 +397,6 @@ function PublicBarber() {
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGAR BLOQUEIOS
-  |--------------------------------------------------------------------------
-  */
-
   async function carregarBloqueios(data: string) {
     if (!barbearia) {
       return;
@@ -542,9 +424,7 @@ function PublicBarber() {
           hora_inicio: item.hora_inicio
             ? item.hora_inicio.substring(0, 5)
             : null,
-
           hora_fim: item.hora_fim ? item.hora_fim.substring(0, 5) : null,
-
           dia_inteiro: item.dia_inteiro,
         }),
       );
@@ -561,12 +441,6 @@ function PublicBarber() {
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGAR DISPONIBILIDADE
-  |--------------------------------------------------------------------------
-  */
-
   async function carregarDisponibilidade(data: string) {
     try {
       setCarregandoHorarios(true);
@@ -581,12 +455,6 @@ function PublicBarber() {
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | SELECIONAR DIA
-  |--------------------------------------------------------------------------
-  */
-
   function selecionarDia(dia: Dia) {
     if (!dia.aberto) {
       return;
@@ -595,29 +463,16 @@ function PublicBarber() {
     setDiaSelecionado(dia);
     setHorarioSelecionado("");
     setErro("");
-
     carregarDisponibilidade(dia.data);
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | ATUALIZAR HORÁRIOS QUANDO O SERVIÇO MUDAR
-  |--------------------------------------------------------------------------
-  */
 
   useEffect(() => {
     if (diaSelecionado && servicoSelecionado) {
       setHorarioSelecionado("");
-
       carregarDisponibilidade(diaSelecionado.data);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servicoSelecionado]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | TELEFONE
-  |--------------------------------------------------------------------------
-  */
 
   function formatarTelefone(valor: string) {
     const apenasNumeros = valor.replace(/\D/g, "").slice(0, 11);
@@ -636,11 +491,189 @@ function PublicBarber() {
     )}-${apenasNumeros.slice(7)}`;
   }
 
+  function formatarData(data: string) {
+    const [ano, mes, dia] = data.slice(0, 10).split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  function formatarHorario(horario: string) {
+    return horario.slice(0, 5);
+  }
+
+  function statusLegivel(status: string) {
+    const statusNormalizado = status.toLowerCase();
+
+    const nomes: Record<string, string> = {
+      agendado: "Agendado",
+      confirmado: "Confirmado",
+      concluido: "Concluído",
+      cancelado: "Cancelado",
+      disponível: "Disponível",
+      disponivel: "Disponível",
+    };
+
+    return nomes[statusNormalizado] || status;
+  }
+
+  function statusPodeCancelar(status: string) {
+    const statusNormalizado = status.toLowerCase();
+    return (
+      statusNormalizado === "agendado" || statusNormalizado === "confirmado"
+    );
+  }
+
   /*
-  |--------------------------------------------------------------------------
-  | AGENDAR
-  |--------------------------------------------------------------------------
-  */
+   * CONSULTAR AGENDAMENTOS PELO TELEFONE
+   */
+  async function consultarAgendamentos() {
+    setErroConsulta("");
+    setMensagemConsulta("");
+    setConsultouAgendamentos(false);
+    setAgendamentosConsultados([]);
+
+    if (!barbearia) {
+      setErroConsulta("Barbearia não encontrada.");
+      return;
+    }
+
+    const telefoneNumeros = telefoneConsulta.replace(/\D/g, "");
+
+    if (telefoneNumeros.length < 10) {
+      setErroConsulta("Digite um telefone válido com DDD.");
+      return;
+    }
+
+    try {
+      setConsultandoAgendamentos(true);
+
+      const { data, error } = await supabase.rpc(
+        "consultar_agendamentos_publico",
+        {
+          p_barbearia_id: barbearia.id,
+          p_telefone: telefoneNumeros,
+        },
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      const resultado = (data || []) as AgendamentoConsultado[];
+
+      const pendentes = resultado.filter(
+        (agendamento) => agendamento.status.toLowerCase() === "agendado",
+      );
+
+      setAgendamentosConsultados(
+        pendentes.map((agendamento) => ({
+          ...agendamento,
+          horario: formatarHorario(agendamento.horario),
+          preco: Number(agendamento.preco),
+        })),
+      );
+
+      setConsultouAgendamentos(true);
+
+      if (pendentes.length === 0) {
+        setMensagemConsulta(
+          "Não há agendamentos aguardando confirmação para esse telefone.",
+        );
+      }
+
+      setConsultouAgendamentos(true);
+
+      if (resultado.length === 0) {
+        setMensagemConsulta(
+          "Não encontramos agendamentos para esse telefone nesta barbearia.",
+        );
+      }
+    } catch (error) {
+      console.error("ERRO AO CONSULTAR AGENDAMENTOS:", error);
+
+      if (error && typeof error === "object" && "message" in error) {
+        setErroConsulta(String(error.message));
+      } else {
+        setErroConsulta("Não foi possível consultar os agendamentos.");
+      }
+    } finally {
+      setConsultandoAgendamentos(false);
+    }
+  }
+
+  /*
+   * CANCELAR UM AGENDAMENTO DA LISTA DE CONSULTA
+   */
+  async function cancelarAgendamentoConsultado(
+    agendamento: AgendamentoConsultado,
+  ) {
+    if (!barbearia) {
+      setErroConsulta("Barbearia não encontrada.");
+      return;
+    }
+
+    const telefoneNumeros = telefoneConsulta.replace(/\D/g, "");
+
+    if (telefoneNumeros.length < 10) {
+      setErroConsulta("Digite novamente um telefone válido.");
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `Deseja realmente cancelar o agendamento de ${agendamento.servico}, em ${formatarData(
+        agendamento.data,
+      )}, às ${formatarHorario(agendamento.horario)}?`,
+    );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setCancelandoConsultaId(agendamento.agendamento_id);
+      setErroConsulta("");
+      setMensagemConsulta("");
+
+      const { data, error } = await supabase.rpc(
+        "cancelar_agendamento_por_telefone_publico",
+        {
+          p_agendamento_id: agendamento.agendamento_id,
+          p_barbearia_id: barbearia.id,
+          p_telefone: telefoneNumeros,
+        },
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        setErroConsulta(
+          "Não foi possível cancelar. O agendamento pode já ter sido cancelado ou não estar mais disponível para cancelamento.",
+        );
+        return;
+      }
+
+      setAgendamentosConsultados((anteriores) =>
+        anteriores.map((item) =>
+          item.agendamento_id === agendamento.agendamento_id
+            ? { ...item, status: "cancelado" }
+            : item,
+        ),
+      );
+
+      setMensagemConsulta("Agendamento cancelado com sucesso.");
+    } catch (error) {
+      console.error("ERRO AO CANCELAR AGENDAMENTO CONSULTADO:", error);
+
+      if (error && typeof error === "object" && "message" in error) {
+        setErroConsulta(String(error.message));
+      } else {
+        setErroConsulta("Não foi possível cancelar o agendamento.");
+      }
+    } finally {
+      setCancelandoConsultaId(null);
+    }
+  }
 
   async function confirmarAgendamento() {
     setErro("");
@@ -665,37 +698,20 @@ function PublicBarber() {
       return;
     }
 
-    /*
-    |----------------------------------------------------------------------
-    | CONFERE NOVAMENTE SE O HORÁRIO AINDA ESTÁ DISPONÍVEL
-    |----------------------------------------------------------------------
-    */
-
     const inicioSelecionado = horarioParaMinutos(horarioSelecionado);
-
     const fimSelecionado = inicioSelecionado + servicoSelecionado.duracao;
 
     if (horarioEstaOcupado(inicioSelecionado, fimSelecionado)) {
       setErro("Esse horário acabou de ser ocupado. Escolha outro.");
-
       await carregarDisponibilidade(diaSelecionado.data);
-
       return;
     }
 
     if (horarioEstaBloqueado(inicioSelecionado, fimSelecionado)) {
       setErro("Esse horário não está mais disponível. Escolha outro.");
-
       await carregarDisponibilidade(diaSelecionado.data);
-
       return;
     }
-
-    /*
-    |----------------------------------------------------------------------
-    | VALIDAÇÃO DO NOME
-    |----------------------------------------------------------------------
-    */
 
     const nomeLimpo = nome.trim();
 
@@ -713,12 +729,6 @@ function PublicBarber() {
       setErro("O nome deve ter no máximo 80 caracteres.");
       return;
     }
-
-    /*
-    |----------------------------------------------------------------------
-    | VALIDAÇÃO DO TELEFONE
-    |----------------------------------------------------------------------
-    */
 
     const telefoneNumeros = telefone.replace(/\D/g, "");
 
@@ -747,9 +757,7 @@ function PublicBarber() {
           error.message.includes("HORARIO_INDISPONIVEL")
         ) {
           setErro("Esse horário acabou de ser ocupado. Escolha outro.");
-
           await carregarDisponibilidade(diaSelecionado.data);
-
           return;
         }
 
@@ -769,12 +777,6 @@ function PublicBarber() {
       };
 
       setAgendamentoCriado(novoAgendamento);
-
-      /*
-      |--------------------------------------------------------------------
-      | ADICIONA O NOVO AGENDAMENTO NA MEMÓRIA
-      |--------------------------------------------------------------------
-      */
 
       setHorariosOcupados((anteriores) => [
         ...anteriores,
@@ -798,12 +800,6 @@ function PublicBarber() {
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | CANCELAR AGENDAMENTO
-  |--------------------------------------------------------------------------
-  */
-
   async function cancelarAgendamento() {
     if (!agendamentoCriado) {
       return;
@@ -817,7 +813,6 @@ function PublicBarber() {
         "cancelar_agendamento_publico",
         {
           p_agendamento_id: agendamentoCriado.id,
-
           p_codigo_cancelamento: agendamentoCriado.codigo_cancelamento,
         },
       );
@@ -828,17 +823,10 @@ function PublicBarber() {
 
       if (!data) {
         setErro("Não foi possível cancelar este agendamento.");
-
         return;
       }
 
       setCancelado(true);
-
-      /*
-      |--------------------------------------------------------------------
-      | REMOVE O AGENDAMENTO DA MEMÓRIA
-      |--------------------------------------------------------------------
-      */
 
       if (horarioSelecionado) {
         setHorariosOcupados((anteriores) =>
@@ -860,12 +848,6 @@ function PublicBarber() {
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | FECHAR MODAL
-  |--------------------------------------------------------------------------
-  */
-
   function fecharModal() {
     setServicoSelecionado(null);
     setDiaSelecionado(null);
@@ -882,12 +864,6 @@ function PublicBarber() {
     setBloqueiosAgenda([]);
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | CARREGANDO
-  |--------------------------------------------------------------------------
-  */
-
   if (carregando || carregandoFuncionamento) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
@@ -896,18 +872,11 @@ function PublicBarber() {
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | ERRO
-  |--------------------------------------------------------------------------
-  */
-
   if (erro && !barbearia) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center px-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">Barbearia não encontrada</h1>
-
           <p className="text-zinc-400">{erro}</p>
         </div>
       </div>
@@ -918,22 +887,13 @@ function PublicBarber() {
     return null;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | INTERFACE
-  |--------------------------------------------------------------------------
-  */
-
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      {/* HEADER */}
-
       <header className="border-b border-zinc-800 bg-zinc-950">
         <div className="max-w-6xl mx-auto px-6 py-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{barbearia.nome}</h1>
-
               <p className="text-zinc-400 mt-2">
                 {barbearia.descricao ||
                   "Cortes modernos, barba e atendimento personalizado."}
@@ -957,15 +917,172 @@ function PublicBarber() {
         </div>
       </header>
 
-      {/* CONTEÚDO */}
-
       <main className="max-w-6xl mx-auto px-6 py-10">
-        {/* SERVIÇOS */}
+        {/* CONSULTAR AGENDAMENTOS */}
+        <section className="mb-12 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-7">
+          <div className="flex items-center gap-3 mb-3">
+            <Search size={22} />
+            <h2 className="text-2xl font-bold">Consultar agendamento</h2>
+          </div>
 
+          <p className="text-sm text-zinc-400 mb-5">
+            Informe o telefone utilizado na reserva para consultar os
+            agendamentos desta barbearia.
+          </p>
+
+          <form
+            className="flex flex-col sm:flex-row gap-3 max-w-2xl"
+            onSubmit={(event) => {
+              event.preventDefault();
+              consultarAgendamentos();
+            }}
+          >
+            <input
+              value={telefoneConsulta}
+              onChange={(event) => {
+                setTelefoneConsulta(formatarTelefone(event.target.value));
+                setErroConsulta("");
+                setMensagemConsulta("");
+              }}
+              placeholder="(86) 99999-9999"
+              inputMode="numeric"
+              autoComplete="tel"
+              aria-label="Telefone usado no agendamento"
+              className="flex-1 min-w-0 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-zinc-400"
+            />
+
+            <button
+              type="submit"
+              disabled={consultandoAgendamentos}
+              className="flex items-center justify-center gap-2 bg-white text-black font-semibold rounded-xl px-5 py-3 hover:bg-zinc-200 disabled:opacity-50"
+            >
+              {consultandoAgendamentos ? (
+                <RefreshCw size={18} className="animate-spin" />
+              ) : (
+                <Search size={18} />
+              )}
+              {consultandoAgendamentos ? "Consultando..." : "Consultar"}
+            </button>
+          </form>
+
+          {erroConsulta && (
+            <div
+              role="alert"
+              className="mt-4 bg-red-950/40 border border-red-900 text-red-300 rounded-xl p-4 text-sm"
+            >
+              {erroConsulta}
+            </div>
+          )}
+
+          {mensagemConsulta && (
+            <div
+              role="status"
+              className="mt-4 bg-green-950/30 border border-green-900 text-green-300 rounded-xl p-4 text-sm"
+            >
+              {mensagemConsulta}
+            </div>
+          )}
+
+          {consultandoAgendamentos && (
+            <p className="text-zinc-400 text-sm mt-5">
+              Buscando seus agendamentos...
+            </p>
+          )}
+
+          {consultouAgendamentos && agendamentosConsultados.length > 0 && (
+            <div className="mt-6 space-y-4">
+              <h3 className="font-semibold text-lg">
+                Agendamentos encontrados ({agendamentosConsultados.length})
+              </h3>
+
+              {agendamentosConsultados.map((agendamento) => {
+                const podeCancelar = statusPodeCancelar(agendamento.status);
+                const cancelamentoEmAndamento =
+                  cancelandoConsultaId === agendamento.agendamento_id;
+
+                return (
+                  <article
+                    key={agendamento.agendamento_id}
+                    className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:p-5"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="font-semibold text-lg">
+                            {agendamento.servico}
+                          </h4>
+                          <p className="text-sm text-zinc-400 mt-1">
+                            Agendamento #{agendamento.agendamento_id}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-300">
+                          <span className="flex items-center gap-2">
+                            <CalendarDays size={16} />
+                            {formatarData(agendamento.data)}
+                          </span>
+
+                          <span className="flex items-center gap-2">
+                            <Clock size={16} />
+                            {formatarHorario(agendamento.horario)}
+                          </span>
+                        </div>
+
+                        <p className="text-sm text-zinc-300">
+                          Valor:{" "}
+                          <strong>
+                            R$ {Number(agendamento.preco).toFixed(2)}
+                          </strong>
+                        </p>
+
+                        <p className="text-sm">
+                          Status:{" "}
+                          <span
+                            className={
+                              agendamento.status.toLowerCase() === "cancelado"
+                                ? "text-red-400"
+                                : agendamento.status.toLowerCase() ===
+                                    "concluido"
+                                  ? "text-zinc-400"
+                                  : "text-green-400"
+                            }
+                          >
+                            {statusLegivel(agendamento.status)}
+                          </span>
+                        </p>
+                      </div>
+
+                      {podeCancelar && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            cancelarAgendamentoConsultado(agendamento)
+                          }
+                          disabled={cancelamentoEmAndamento}
+                          className="flex items-center justify-center gap-2 border border-red-900 text-red-400 rounded-xl px-4 py-3 hover:bg-red-950/40 disabled:opacity-50"
+                        >
+                          {cancelamentoEmAndamento ? (
+                            <RefreshCw size={17} className="animate-spin" />
+                          ) : (
+                            <X size={17} />
+                          )}
+                          {cancelamentoEmAndamento
+                            ? "Cancelando..."
+                            : "Cancelar agendamento"}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* SERVIÇOS */}
         <section>
           <div className="flex items-center gap-3 mb-6">
             <Scissors />
-
             <h2 className="text-2xl font-bold">Escolha seu serviço</h2>
           </div>
 
@@ -1016,12 +1133,10 @@ function PublicBarber() {
         </section>
 
         {/* DIAS */}
-
         {servicoSelecionado && (
           <section className="mt-10">
             <div className="flex items-center gap-3 mb-6">
               <CalendarDays />
-
               <h2 className="text-2xl font-bold">Escolha o dia</h2>
             </div>
 
@@ -1043,11 +1158,9 @@ function PublicBarber() {
                     }`}
                   >
                     <div className="text-sm">{dia.nome}</div>
-
                     <div className="text-xs text-zinc-500 mt-2">
                       {dia.data.split("-").reverse().join("/")}
                     </div>
-
                     {!dia.aberto && <div className="text-xs mt-2">Fechado</div>}
                   </button>
                 );
@@ -1057,12 +1170,10 @@ function PublicBarber() {
         )}
 
         {/* HORÁRIOS */}
-
         {diaSelecionado && (
           <section className="mt-10">
             <div className="flex items-center gap-3 mb-6">
               <Clock />
-
               <h2 className="text-2xl font-bold">Escolha o horário</h2>
             </div>
 
@@ -1088,7 +1199,6 @@ function PublicBarber() {
                       }`}
                     >
                       <div className="font-semibold">{horario}</div>
-
                       <div className="text-xs mt-1">Disponível</div>
                     </button>
                   );
@@ -1099,24 +1209,22 @@ function PublicBarber() {
         )}
 
         {/* FORMULÁRIO */}
-
         {horarioSelecionado && !agendamentoCriado && (
           <section className="mt-10 max-w-xl">
             <div className="flex items-center gap-3 mb-6">
               <User />
-
               <h2 className="text-2xl font-bold">Seus dados</h2>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-zinc-400 mb-2">Nome</label>
-
                 <input
                   value={nome}
-                  onChange={(e) => setNome(e.target.value)}
+                  onChange={(event) => setNome(event.target.value)}
                   placeholder="Digite seu nome"
                   maxLength={80}
+                  autoComplete="name"
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-zinc-500"
                 />
               </div>
@@ -1125,14 +1233,14 @@ function PublicBarber() {
                 <label className="block text-sm text-zinc-400 mb-2">
                   Telefone
                 </label>
-
                 <input
                   value={telefone}
-                  onChange={(e) =>
-                    setTelefone(formatarTelefone(e.target.value))
+                  onChange={(event) =>
+                    setTelefone(formatarTelefone(event.target.value))
                   }
                   placeholder="(86) 99999-9999"
                   inputMode="numeric"
+                  autoComplete="tel"
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-zinc-500"
                 />
               </div>
@@ -1156,7 +1264,6 @@ function PublicBarber() {
       </main>
 
       {/* MODAL DE SUCESSO */}
-
       {agendamentoCriado && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full">
@@ -1171,7 +1278,6 @@ function PublicBarber() {
                     <h2 className="text-xl font-bold">
                       Agendamento realizado!
                     </h2>
-
                     <p className="text-sm text-zinc-400">
                       Seu horário foi reservado.
                     </p>
@@ -1181,13 +1287,11 @@ function PublicBarber() {
                 <div className="space-y-3 bg-zinc-950 rounded-xl p-4">
                   <div>
                     <span className="text-zinc-500 text-sm">Serviço</span>
-
                     <p className="font-medium">{servicoSelecionado?.nome}</p>
                   </div>
 
                   <div>
                     <span className="text-zinc-500 text-sm">Data</span>
-
                     <p className="font-medium">
                       {diaSelecionado?.data.split("-").reverse().join("/")}
                     </p>
@@ -1195,7 +1299,6 @@ function PublicBarber() {
 
                   <div>
                     <span className="text-zinc-500 text-sm">Horário</span>
-
                     <p className="font-medium">{horarioSelecionado}</p>
                   </div>
                 </div>
@@ -1214,7 +1317,6 @@ function PublicBarber() {
                   >
                     <span className="flex items-center justify-center gap-2">
                       <X size={18} />
-
                       {cancelando ? "Cancelando..." : "Cancelar agendamento"}
                     </span>
                   </button>
@@ -1228,37 +1330,37 @@ function PublicBarber() {
                 </div>
               </>
             ) : (
-              <>
-                <div className="text-center">
-                  <div className="mx-auto bg-zinc-800 text-zinc-300 rounded-full p-3 w-fit">
-                    <Check />
-                  </div>
-
-                  <h2 className="text-xl font-bold mt-4">
-                    Agendamento cancelado
-                  </h2>
-
-                  <p className="text-zinc-400 mt-2">
-                    O horário voltou a ficar disponível.
-                  </p>
-
-                  <button
-                    onClick={fecharModal}
-                    className="w-full bg-white text-black rounded-xl py-3 font-semibold mt-6"
-                  >
-                    Fechar
-                  </button>
+              <div className="text-center">
+                <div className="mx-auto bg-zinc-800 text-zinc-300 rounded-full p-3 w-fit">
+                  <Check />
                 </div>
-              </>
+
+                <h2 className="text-xl font-bold mt-4">
+                  Agendamento cancelado
+                </h2>
+
+                <p className="text-zinc-400 mt-2">
+                  O horário voltou a ficar disponível.
+                </p>
+
+                <button
+                  onClick={fecharModal}
+                  className="w-full bg-white text-black rounded-xl py-3 font-semibold mt-6"
+                >
+                  Fechar
+                </button>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {/* ERRO GERAL */}
-
       {erro && !agendamentoCriado && (
-        <div className="fixed bottom-6 right-6 bg-red-950 border border-red-900 text-red-300 rounded-xl px-5 py-4 shadow-xl">
+        <div
+          role="alert"
+          className="fixed bottom-6 right-6 bg-red-950 border border-red-900 text-red-300 rounded-xl px-5 py-4 shadow-xl"
+        >
           {erro}
         </div>
       )}
