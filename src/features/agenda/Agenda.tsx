@@ -738,7 +738,7 @@ function Agenda() {
                     onClick={() =>
                       alterarStatus(agendamentoSelecionado.id, "confirmado")
                     }
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 font-semibold text-black transition hover:bg-green-400"
+                    className=" items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 font-semibold text-black transition hover:bg-green-400"
                   >
                     <Check size={18} />
                     Confirmar atendimento
@@ -915,7 +915,7 @@ function Agenda() {
                 type="button"
                 onClick={criarBloqueio}
                 disabled={salvandoBloqueio}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
+                className=" items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
               >
                 {salvandoBloqueio ? (
                   "Salvando..."

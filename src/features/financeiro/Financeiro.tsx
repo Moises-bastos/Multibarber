@@ -43,13 +43,8 @@ function Financeiro() {
           data,
           horario,
           status,
-          cliente:clientes(
-            nome
-          ),
-          servico:servicos(
-            nome,
-            preco
-          )
+          cliente:clientes(nome),
+          servico:servicos(nome, preco)
         `,
         )
         .eq("barbearia_id", barbearia.id)
@@ -180,34 +175,37 @@ function Financeiro() {
       : 0;
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-full p-4 sm:p-6 lg:p-8">
-      {/* Cabeçalho */}
-      <header className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto w-full min-w-0 max-w-full overflow-x-clip p-4 sm:p-6 lg:p-8">
+      {/* Cabeçalho responsivo */}
+      <header className="flex w-full min-w-0 flex-col gap-5">
         <div className="min-w-0">
-          <p className="break-words text-sm text-zinc-400 sm:text-base">
+          <p className="max-w-full break-words text-sm leading-relaxed text-zinc-400 sm:text-base">
             Acompanhe o desempenho financeiro da sua barbearia
           </p>
 
-          <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Financeiro</h1>
+          <h1 className="mt-2 text-3xl font-bold sm:text-4xl">Financeiro</h1>
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+        <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={carregarFinanceiro}
             disabled={carregando}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="flex min-h-12 w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw size={16} className={carregando ? "animate-spin" : ""} />
+            <RefreshCw
+              size={18}
+              className={`shrink-0 ${carregando ? "animate-spin" : ""}`}
+            />
 
-            {carregando ? "Atualizando..." : "Atualizar"}
+            <span>{carregando ? "Atualizando..." : "Atualizar"}</span>
           </button>
 
           <select
             value={periodo}
             onChange={(e) => setPeriodo(e.target.value)}
             aria-label="Selecionar período financeiro"
-            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-amber-500 sm:w-auto"
+            className="min-h-12 w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-500"
           >
             <option value="hoje">Hoje</option>
             <option value="semana">Esta semana</option>
@@ -216,28 +214,36 @@ function Financeiro() {
         </div>
       </header>
 
-      {/* Erro */}
+      {/* Mensagem de erro */}
       {erro && (
         <div
           role="alert"
-          className="mt-6 rounded-xl border border-red-900/50 bg-red-500/10 p-4 text-sm text-red-400"
+          className="mt-6 break-words rounded-xl border border-red-900/50 bg-red-500/10 p-4 text-sm text-red-400"
         >
           {erro}
+          <button
+            type="button"
+            onClick={carregarFinanceiro}
+            className="ml-2 font-semibold underline"
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 
+      {/* Carregamento */}
       {carregando ? (
         <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center sm:p-10">
           <p className="text-zinc-400">Carregando financeiro...</p>
         </div>
       ) : (
         <>
-          {/* Cards de indicadores */}
+          {/* Indicadores financeiros */}
           <div className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:mt-7 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
             {/* Faturamento */}
             <div className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
                   <Wallet size={22} />
                 </div>
 
@@ -246,7 +252,7 @@ function Financeiro() {
 
               <p className="mt-5 text-sm text-zinc-500">Faturamento</p>
 
-              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
+              <p className="mt-1 break-words text-2xl font-bold sm:text-2xl">
                 {formatarMoeda(faturamentoTotal)}
               </p>
 
@@ -261,7 +267,7 @@ function Financeiro() {
 
               <p className="mt-5 text-sm text-zinc-500">Faturamento hoje</p>
 
-              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
+              <p className="mt-1 break-words text-2xl font-bold sm:text-2xl">
                 {formatarMoeda(faturamentoHoje)}
               </p>
 
@@ -278,7 +284,7 @@ function Financeiro() {
 
               <p className="mt-5 text-sm text-zinc-500">Atendimentos</p>
 
-              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
+              <p className="mt-1 break-words text-2xl font-bold sm:text-2xl">
                 {quantidadeAtendimentos}
               </p>
 
@@ -293,7 +299,7 @@ function Financeiro() {
 
               <p className="mt-5 text-sm text-zinc-500">Ticket médio</p>
 
-              <p className="mt-1 break-words text-xl font-bold sm:text-2xl">
+              <p className="mt-1 break-words text-2xl font-bold sm:text-2xl">
                 {formatarMoeda(ticketMedio)}
               </p>
 
@@ -303,8 +309,8 @@ function Financeiro() {
             </div>
           </div>
 
-          {/* Conteúdo inferior */}
-          <div className="mt-5 grid min-w-0 gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-3">
+          {/* Histórico e resumo */}
+          <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-3">
             {/* Atendimentos recentes */}
             <section className="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 lg:p-6 xl:col-span-2">
               <div>
@@ -339,7 +345,7 @@ function Financeiro() {
                       </div>
                     </div>
 
-                    <div className="text-left sm:shrink-0 sm:text-right">
+                    <div className="min-w-0 text-left sm:shrink-0 sm:text-right">
                       <p className="break-words font-semibold text-green-400">
                         {formatarMoeda(atendimento.valor)}
                       </p>
