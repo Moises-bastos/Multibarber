@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   X,
+  Link as LinkIcon,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -24,30 +25,15 @@ function DashboardLayout() {
   }
 
   const menuItems = [
+    { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { label: "Agenda", path: "/agenda", icon: CalendarDays },
+    { label: "Clientes", path: "/clientes", icon: Users },
+    { label: "Serviços", path: "/servicos", icon: Scissors },
+    { label: "Financeiro", path: "/financeiro", icon: Wallet },
     {
-      label: "Dashboard",
-      path: "/dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      label: "Agenda",
-      path: "/agenda",
-      icon: CalendarDays,
-    },
-    {
-      label: "Clientes",
-      path: "/clientes",
-      icon: Users,
-    },
-    {
-      label: "Serviços",
-      path: "/servicos",
-      icon: Scissors,
-    },
-    {
-      label: "Financeiro",
-      path: "/financeiro",
-      icon: Wallet,
+      label: "Meu link de agendamento",
+      path: "/meu-link",
+      icon: LinkIcon,
     },
   ];
 
@@ -59,7 +45,6 @@ function DashboardLayout() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
-      {/* Barra superior: aparece apenas em telas pequenas */}
       <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-zinc-800 bg-black px-4 md:hidden">
         <Link
           to="/dashboard"
@@ -80,7 +65,6 @@ function DashboardLayout() {
         </button>
       </header>
 
-      {/* Fundo escuro quando o menu móvel estiver aberto */}
       {menuAberto && (
         <button
           type="button"
@@ -90,7 +74,6 @@ function DashboardLayout() {
         />
       )}
 
-      {/* Menu lateral */}
       <aside
         className={`fixed bottom-0 left-0 top-16 z-50 flex w-72 flex-col border-r border-zinc-800 bg-black p-5 transition-transform duration-200 md:top-0 md:z-30 md:h-screen md:w-64 md:translate-x-0 md:p-6 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
@@ -152,7 +135,6 @@ function DashboardLayout() {
         </div>
       </aside>
 
-      {/* Conteúdo principal */}
       <section className="min-h-screen min-w-0 overflow-x-hidden pt-16 md:ml-64 md:pt-0">
         <Outlet />
       </section>

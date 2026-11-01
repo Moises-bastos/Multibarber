@@ -11,6 +11,7 @@ import Clientes from "../features/clientes/Clientes";
 import Servicos from "../features/servicos/Servicos";
 import Financeiro from "../features/financeiro/Financeiro";
 import Configuracoes from "../features/configuracoes/Configuracoes";
+import MeuLinkAgendamento from "../features/meu-link/MeuLinkAgendamento";
 
 import DashboardLayout from "../layouts/DashboardLayout";
 
@@ -30,6 +31,7 @@ function AppRoutes() {
           <Route path="/clientes" element={<Clientes />} />
           <Route path="/servicos" element={<Servicos />} />
           <Route path="/financeiro" element={<Financeiro />} />
+          <Route path="/meu-link" element={<MeuLinkAgendamento />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
         </Route>
       </Routes>

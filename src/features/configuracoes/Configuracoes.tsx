@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Link as LinkIcon, Save } from "lucide-react";
-
+import { Save } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
 
@@ -19,7 +18,6 @@ type HorarioBanco = {
 
 function Configuracoes() {
   const [barbeariaId, setBarbeariaId] = useState("");
-  const [slugBarbearia, setSlugBarbearia] = useState("");
   const [carregandoBarbearia, setCarregandoBarbearia] = useState(true);
 
   const [nome, setNome] = useState("");
@@ -31,9 +29,6 @@ function Configuracoes() {
   const [salvandoInformacoes, setSalvandoInformacoes] = useState(false);
   const [mensagemInformacoes, setMensagemInformacoes] = useState("");
   const [erroInformacoes, setErroInformacoes] = useState("");
-
-  const [copiado, setCopiado] = useState(false);
-  const [erroLink, setErroLink] = useState("");
 
   const [carregandoHorarios, setCarregandoHorarios] = useState(true);
   const [salvandoHorarios, setSalvandoHorarios] = useState(false);
@@ -70,7 +65,6 @@ function Configuracoes() {
 
         setBarbeariaId(barbearia.id);
         setNome(barbearia.nome);
-        setSlugBarbearia(barbearia.slug);
       } catch (error) {
         console.error("Erro ao carregar barbearia:", error);
         setErroInformacoes(
@@ -98,13 +92,9 @@ function Configuracoes() {
           .eq("barbearia_id", barbearia.id)
           .order("dia_semana");
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
-        if (!data || data.length === 0) {
-          return;
-        }
+        if (!data || data.length === 0) return;
 
         const dados = data as HorarioBanco[];
 
@@ -113,7 +103,6 @@ function Configuracoes() {
 
           dados.forEach((horario) => {
             const dia = dias[horario.dia_semana];
-
             if (!dia) return;
 
             novos[dia] = {
@@ -135,10 +124,6 @@ function Configuracoes() {
 
     carregarHorarios();
   }, []);
-
-  const linkPublico = slugBarbearia
-    ? `${window.location.origin}/barbearia/${slugBarbearia}`
-    : "";
 
   async function salvarInformacoes() {
     if (!barbeariaId) {
@@ -172,26 +157,6 @@ function Configuracoes() {
       setErroInformacoes("Não foi possível salvar o nome da barbearia.");
     } finally {
       setSalvandoInformacoes(false);
-    }
-  }
-
-  async function copiarLink() {
-    setErroLink("");
-    setCopiado(false);
-
-    if (!linkPublico) {
-      setErroLink("O link ainda não está disponível.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(linkPublico);
-      setCopiado(true);
-    } catch (error) {
-      console.error("Erro ao copiar link:", error);
-      setErroLink(
-        "Não foi possível copiar automaticamente. Selecione e copie o link manualmente.",
-      );
     }
   }
 
@@ -253,16 +218,15 @@ function Configuracoes() {
   }
 
   return (
-    <div className="p-8">
+    <div className="min-w-0 p-4 sm:p-6 lg:p-8">
       <header>
-        <p className="text-zinc-400">
+        <p className="text-sm text-zinc-400">
           Gerencie as informações da sua barbearia
         </p>
-        <h1 className="mt-1 text-3xl font-bold">Configurações</h1>
+        <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Configurações</h1>
       </header>
 
-      {/* Informações da barbearia */}
-      <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+      <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
         <h2 className="text-xl font-semibold">Informações da barbearia</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Essas informações serão exibidas para seus clientes.
@@ -328,6 +292,7 @@ function Configuracoes() {
                 {mensagemInformacoes}
               </p>
             )}
+
             {erroInformacoes && (
               <p className="mt-3 text-sm text-red-400">{erroInformacoes}</p>
             )}
@@ -335,55 +300,7 @@ function Configuracoes() {
         )}
       </section>
 
-      {/* Link público */}
-      <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
-            <LinkIcon size={22} />
-          </div>
-
-          <div>
-            <h2 className="text-xl font-semibold">Link de agendamento</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Compartilhe este link para seus clientes agendarem um horário.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <input
-            type="text"
-            readOnly
-            value={
-              carregandoBarbearia
-                ? "Carregando link..."
-                : linkPublico || "Não foi possível carregar o link"
-            }
-            className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-zinc-300 outline-none"
-          />
-
-          <button
-            type="button"
-            onClick={copiarLink}
-            disabled={carregandoBarbearia || !linkPublico}
-            className="flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-4 py-3 text-zinc-300 transition hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Copy size={18} />
-            {copiado ? "Copiado!" : "Copiar"}
-          </button>
-        </div>
-
-        {erroLink && <p className="mt-3 text-sm text-red-400">{erroLink}</p>}
-
-        {copiado && (
-          <p className="mt-3 text-sm text-green-400">
-            Link copiado! Agora você pode enviá-lo aos seus clientes.
-          </p>
-        )}
-      </section>
-
-      {/* Horários de funcionamento */}
-      <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+      <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
         <h2 className="text-xl font-semibold">Horário de funcionamento</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Defina os dias e horários em que sua barbearia estará disponível.
@@ -482,6 +399,7 @@ function Configuracoes() {
             {mensagemHorarios && (
               <p className="mt-3 text-sm text-green-400">{mensagemHorarios}</p>
             )}
+
             {erroHorarios && (
               <p className="mt-3 text-sm text-red-400">{erroHorarios}</p>
             )}
