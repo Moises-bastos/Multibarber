@@ -11,6 +11,7 @@ import {
   Ban,
   Plus,
   Trash2,
+  MessageCircle,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
@@ -188,6 +189,7 @@ function Agenda() {
 
   useEffect(() => {
     const proximosDias = gerarProximosDias();
+
     setDias(proximosDias);
     carregarAgendamentos();
   }, []);
@@ -290,7 +292,6 @@ function Agenda() {
       setSalvandoBloqueio(false);
     }
   }
-
   async function excluirBloqueio(id: number) {
     const confirmar = window.confirm("Deseja realmente remover este bloqueio?");
 
@@ -333,6 +334,39 @@ function Agenda() {
       day: "2-digit",
       month: "long",
     });
+  }
+
+  // Abre uma conversa com o cliente e prepara a mensagem de confirmação.
+  function enviarConfirmacaoWhatsApp(agendamento: Agendamento) {
+    const telefone = agendamento.cliente.telefone.replace(/\D/g, "");
+
+    if (!telefone) {
+      alert("O telefone deste cliente não está cadastrado.");
+      return;
+    }
+
+    // Acrescenta o código do Brasil caso o telefone ainda não tenha DDI.
+    const telefoneCompleto = telefone.startsWith("55")
+      ? telefone
+      : `55${telefone}`;
+
+    const [ano, mes, dia] = agendamento.data.split("-");
+    const dataFormatada = `${dia}/${mes}/${ano}`;
+
+    const mensagem = `Olá, ${agendamento.cliente.nome}! Tudo bem?
+
+seu agendamento esta confirmado 💈.
+
+Serviço: ${agendamento.servico.nome}✂️
+Data: ${dataFormatada}📆
+Horário: ${agendamento.horario}⏰
+Valor: ${formatarPreco(agendamento.servico.preco)}
+
+Aguardamos você!`;
+
+    const url = `https://wa.me/${telefoneCompleto}?text=${encodeURIComponent(mensagem)}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   function nomeDiaSemana(dataString: string) {
@@ -392,6 +426,7 @@ function Agenda() {
           <p className="break-words text-sm text-zinc-400 sm:text-base">
             Organize os horários da sua barbearia
           </p>
+
           <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Agenda</h1>
         </div>
 
@@ -409,9 +444,7 @@ function Agenda() {
             type="button"
             onClick={async () => {
               await carregarAgendamentos();
-              if (dataAtual) {
-                await carregarBloqueios(dataAtual);
-              }
+              if (dataAtual) await carregarBloqueios(dataAtual);
             }}
             disabled={carregando || carregandoBloqueios}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
@@ -422,6 +455,7 @@ function Agenda() {
                 carregando || carregandoBloqueios ? "animate-spin" : ""
               }`}
             />
+
             {carregando || carregandoBloqueios ? "Atualizando..." : "Atualizar"}
           </button>
         </div>
@@ -444,6 +478,7 @@ function Agenda() {
               }`}
             >
               <p className="break-words text-sm">{diaSemana}</p>
+
               <p className="mt-1 break-words text-sm font-semibold sm:text-base">
                 {formatarData(data)}
               </p>
@@ -468,15 +503,17 @@ function Agenda() {
         </div>
       )}
 
-      {/* Lista de agendamentos: agora aparece antes do resumo e dos bloqueios */}
+      {/* Lista de agendamentos */}
       {!carregando && (
         <div className="mt-4 min-w-0 space-y-3 sm:mt-5">
           {horariosDoDia.length === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950 p-6 text-center sm:p-10">
               <Clock size={32} className="mx-auto text-zinc-700" />
+
               <p className="mt-3 font-medium text-zinc-500">
                 Nenhum agendamento
               </p>
+
               <p className="mt-1 text-sm text-zinc-600">
                 Não existem atendimentos marcados para este dia.
               </p>
@@ -510,12 +547,17 @@ function Agenda() {
 
                       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-sm text-zinc-500">
                         <Scissors size={14} className="shrink-0" />
+
                         <span className="break-words">
                           {agendamento.servico.nome}
                         </span>
+
                         <span>•</span>
+
                         <span>{formatarPreco(agendamento.servico.preco)}</span>
+
                         <span>•</span>
+
                         <span>{agendamento.servico.duracao} min</span>
                       </div>
                     </div>
@@ -523,14 +565,25 @@ function Agenda() {
                 </div>
 
                 {agendamento.status === "agendado" ? (
-                  <button
-                    type="button"
-                    onClick={() => setAgendamentoSelecionado(agendamento)}
-                    className="flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-green-500/10 transition hover:bg-green-400 md:w-auto"
-                  >
-                    <Check size={17} />
-                    Confirmar atendimento
-                  </button>
+                  <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row md:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => enviarConfirmacaoWhatsApp(agendamento)}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-500 sm:w-auto"
+                    >
+                      <MessageCircle size={17} />
+                      WhatsApp
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAgendamentoSelecionado(agendamento)}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-green-500/10 transition hover:bg-green-400 sm:w-auto"
+                    >
+                      <Check size={17} />
+                      Confirmar atendimento
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
@@ -547,7 +600,6 @@ function Agenda() {
           )}
         </div>
       )}
-
       {/* Resumo do dia */}
       {dataAtual && (
         <div className="mt-5 flex min-w-0 flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
@@ -558,6 +610,7 @@ function Agenda() {
 
             <div className="min-w-0">
               <p className="text-sm text-zinc-500">Agenda de</p>
+
               <p className="break-words font-semibold">
                 {primeiraMaiuscula(nomeDiaSemana(dataAtual))},{" "}
                 {formatarData(dataAtual)}
@@ -567,6 +620,7 @@ function Agenda() {
 
           <div className="flex items-center gap-2 text-sm text-zinc-500">
             <Clock size={16} className="shrink-0" />
+
             <span>
               {quantidadeAtendimentos}{" "}
               {quantidadeAtendimentos === 1 ? "atendimento" : "atendimentos"}
@@ -586,6 +640,7 @@ function Agenda() {
 
               <div className="min-w-0">
                 <h2 className="font-semibold">Bloqueios do dia</h2>
+
                 <p className="mt-1 break-words text-sm text-zinc-500">
                   Horários em que novos agendamentos não serão permitidos.
                 </p>
@@ -659,6 +714,7 @@ function Agenda() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">Agendamento</h2>
+
                 <p className="mt-1 text-sm text-zinc-500">
                   Gerencie este atendimento
                 </p>
@@ -677,9 +733,11 @@ function Agenda() {
             <div className="mt-5 space-y-4">
               <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
                 <p className="text-sm text-zinc-500">Cliente</p>
+
                 <p className="mt-1 break-words font-semibold">
                   {agendamentoSelecionado.cliente.nome}
                 </p>
+
                 <p className="mt-1 break-words text-sm text-zinc-500">
                   {agendamentoSelecionado.cliente.telefone}
                 </p>
@@ -688,6 +746,7 @@ function Agenda() {
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
                   <p className="text-sm text-zinc-500">Horário</p>
+
                   <p className="mt-1 font-semibold">
                     {agendamentoSelecionado.horario}
                   </p>
@@ -695,6 +754,7 @@ function Agenda() {
 
                 <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 p-3 sm:p-4">
                   <p className="text-sm text-zinc-500">Valor</p>
+
                   <p className="mt-1 break-words font-semibold text-amber-500">
                     {formatarPreco(agendamentoSelecionado.servico.preco)}
                   </p>
@@ -703,9 +763,11 @@ function Agenda() {
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
                 <p className="text-sm text-zinc-500">Serviço</p>
+
                 <p className="mt-1 break-words font-semibold">
                   {agendamentoSelecionado.servico.nome}
                 </p>
+
                 <p className="mt-1 text-sm text-zinc-500">
                   Duração: {agendamentoSelecionado.servico.duracao} minutos
                 </p>
@@ -720,6 +782,7 @@ function Agenda() {
 
                   <div>
                     <p className="font-semibold text-amber-400">Atenção</p>
+
                     <p className="mt-1 text-sm leading-relaxed text-amber-200/80">
                       Confirme somente depois de realizar o corte. Ao confirmar,
                       este atendimento será registrado no histórico do cliente e
@@ -738,7 +801,7 @@ function Agenda() {
                     onClick={() =>
                       alterarStatus(agendamentoSelecionado.id, "confirmado")
                     }
-                    className=" items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 font-semibold text-black transition hover:bg-green-400"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 font-semibold text-black transition hover:bg-green-400"
                   >
                     <Check size={18} />
                     Confirmar atendimento
@@ -790,6 +853,7 @@ function Agenda() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">Bloquear agenda</h2>
+
                 <p className="mt-1 text-sm text-zinc-500">
                   Impedir novos agendamentos em um período.
                 </p>
@@ -807,6 +871,7 @@ function Agenda() {
 
             <div className="mt-5">
               <label className="text-sm font-medium text-zinc-300">Data</label>
+
               <input
                 type="date"
                 value={dataBloqueio}
@@ -855,6 +920,7 @@ function Agenda() {
                   <label className="text-sm font-medium text-zinc-300">
                     Início
                   </label>
+
                   <input
                     type="time"
                     value={horaInicio}
@@ -867,6 +933,7 @@ function Agenda() {
                   <label className="text-sm font-medium text-zinc-300">
                     Fim
                   </label>
+
                   <input
                     type="time"
                     value={horaFim}
@@ -881,6 +948,7 @@ function Agenda() {
               <label className="text-sm font-medium text-zinc-300">
                 Motivo <span className="text-zinc-600">(opcional)</span>
               </label>
+
               <input
                 type="text"
                 value={motivo}
@@ -896,6 +964,7 @@ function Agenda() {
                 size={18}
                 className="mt-0.5 shrink-0 text-amber-400"
               />
+
               <p className="text-sm leading-relaxed text-zinc-400">
                 Clientes não poderão agendar horários que coincidam com este
                 bloqueio.
@@ -915,7 +984,7 @@ function Agenda() {
                 type="button"
                 onClick={criarBloqueio}
                 disabled={salvandoBloqueio}
-                className=" items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-1"
               >
                 {salvandoBloqueio ? (
                   "Salvando..."

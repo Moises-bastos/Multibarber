@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+
 import { Save } from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
+
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
 
 type Horario = {
@@ -22,9 +25,7 @@ function Configuracoes() {
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [descricao, setDescricao] = useState(
-    "Cortes modernos, barba e atendimento personalizado.",
-  );
+  const [descricao, setDescricao] = useState("");
 
   const [salvandoInformacoes, setSalvandoInformacoes] = useState(false);
   const [mensagemInformacoes, setMensagemInformacoes] = useState("");
@@ -65,6 +66,8 @@ function Configuracoes() {
 
         setBarbeariaId(barbearia.id);
         setNome(barbearia.nome);
+        setTelefone(barbearia.telefone ?? "");
+        setDescricao(barbearia.descricao ?? "");
       } catch (error) {
         console.error("Erro ao carregar barbearia:", error);
         setErroInformacoes(
@@ -145,16 +148,25 @@ function Configuracoes() {
     try {
       const { error } = await supabase
         .from("barbearias")
-        .update({ nome: nome.trim() })
+        .update({
+          nome: nome.trim(),
+          telefone: telefone.trim() || null,
+          descricao: descricao.trim() || null,
+        })
         .eq("id", barbeariaId);
 
       if (error) throw error;
 
       setNome(nome.trim());
-      setMensagemInformacoes("Nome da barbearia salvo com sucesso!");
+      setTelefone(telefone.trim());
+      setDescricao(descricao.trim());
+
+      setMensagemInformacoes("Informações da barbearia salvas com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar informações:", error);
-      setErroInformacoes("Não foi possível salvar o nome da barbearia.");
+      setErroInformacoes(
+        "Não foi possível salvar as informações da barbearia.",
+      );
     } finally {
       setSalvandoInformacoes(false);
     }
@@ -223,11 +235,13 @@ function Configuracoes() {
         <p className="text-sm text-zinc-400">
           Gerencie as informações da sua barbearia
         </p>
+
         <h1 className="mt-1 text-2xl font-bold sm:text-3xl">Configurações</h1>
       </header>
 
       <section className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
         <h2 className="text-xl font-semibold">Informações da barbearia</h2>
+
         <p className="mt-1 text-sm text-zinc-500">
           Essas informações serão exibidas para seus clientes.
         </p>
@@ -243,6 +257,7 @@ function Configuracoes() {
                 <label className="mb-2 block text-sm text-zinc-300">
                   Nome da barbearia
                 </label>
+
                 <input
                   type="text"
                   value={nome}
@@ -255,6 +270,7 @@ function Configuracoes() {
                 <label className="mb-2 block text-sm text-zinc-300">
                   Telefone
                 </label>
+
                 <input
                   type="tel"
                   value={telefone}
@@ -269,6 +285,7 @@ function Configuracoes() {
               <label className="mb-2 block text-sm text-zinc-300">
                 Descrição
               </label>
+
               <textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
@@ -302,6 +319,7 @@ function Configuracoes() {
 
       <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
         <h2 className="text-xl font-semibold">Horário de funcionamento</h2>
+
         <p className="mt-1 text-sm text-zinc-500">
           Defina os dias e horários em que sua barbearia estará disponível.
         </p>
@@ -324,6 +342,7 @@ function Configuracoes() {
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="font-medium">{dia}</p>
+
                         <p
                           className={`mt-1 text-xs ${
                             horario.aberto ? "text-green-400" : "text-zinc-600"

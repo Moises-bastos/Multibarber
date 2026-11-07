@@ -11,7 +11,7 @@ export async function buscarMinhaBarbearia() {
 
   const { data, error } = await supabase
     .from("barbearias")
-    .select("id, nome, slug")
+    .select("id, nome, slug, telefone, descricao")
     .eq("owner_id", user.id)
     .single();
 
