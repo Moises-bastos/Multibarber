@@ -13,6 +13,7 @@ import {
   Trash2,
   MessageCircle,
 } from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
 import { buscarMinhaBarbearia } from "../../utils/barbearia";
 
@@ -45,14 +46,20 @@ type TipoBloqueio = "horario" | "dia";
 
 function Agenda() {
   const [diaSelecionado, setDiaSelecionado] = useState(0);
+
   const [agendamentoSelecionado, setAgendamentoSelecionado] =
     useState<Agendamento | null>(null);
+
+  const [confirmandoAtendimento, setConfirmandoAtendimento] = useState(false);
+
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [dias, setDias] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroAgenda, setErroAgenda] = useState("");
+
   const [bloqueios, setBloqueios] = useState<BloqueioAgenda[]>([]);
   const [carregandoBloqueios, setCarregandoBloqueios] = useState(false);
+
   const [modalBloqueioAberto, setModalBloqueioAberto] = useState(false);
   const [dataBloqueio, setDataBloqueio] = useState("");
   const [tipoBloqueio, setTipoBloqueio] = useState<TipoBloqueio>("horario");
@@ -136,6 +143,7 @@ function Agenda() {
       setAgendamentos(dados);
     } catch (error) {
       console.error("ERRO AO CARREGAR AGENDA:", error);
+
       setErroAgenda(
         "Não foi possível atualizar os agendamentos. Tente novamente.",
       );
@@ -204,6 +212,10 @@ function Agenda() {
 
   async function alterarStatus(id: number, novoStatus: Agendamento["status"]) {
     try {
+      if (novoStatus === "confirmado") {
+        setConfirmandoAtendimento(true);
+      }
+
       const barbearia = await buscarMinhaBarbearia();
 
       const { error } = await supabase
@@ -224,13 +236,21 @@ function Agenda() {
         ),
       );
 
-      setAgendamentoSelecionado(null);
+      if (novoStatus === "confirmado" && agendamentoSelecionado?.id === id) {
+        // Mantém o modal aberto para exibir a animação de confirmação.
+        setAgendamentoSelecionado((atual) =>
+          atual ? { ...atual, status: "confirmado" } : atual,
+        );
+      } else {
+        setAgendamentoSelecionado(null);
+      }
     } catch (error) {
       console.error("ERRO AO ALTERAR STATUS:", error);
       alert("Não foi possível atualizar o agendamento.");
+    } finally {
+      setConfirmandoAtendimento(false);
     }
   }
-
   function abrirModalBloqueio() {
     setDataBloqueio(dataAtual || "");
     setTipoBloqueio("horario");
@@ -292,6 +312,7 @@ function Agenda() {
       setSalvandoBloqueio(false);
     }
   }
+
   async function excluirBloqueio(id: number) {
     const confirmar = window.confirm("Deseja realmente remover este bloqueio?");
 
@@ -328,6 +349,7 @@ function Agenda() {
 
   function formatarData(dataString: string) {
     const [ano, mes, dia] = dataString.split("-").map(Number);
+
     const data = new Date(ano, mes - 1, dia);
 
     return data.toLocaleDateString("pt-BR", {
@@ -351,17 +373,15 @@ function Agenda() {
       : `55${telefone}`;
 
     const [ano, mes, dia] = agendamento.data.split("-");
+
     const dataFormatada = `${dia}/${mes}/${ano}`;
 
     const mensagem = `Olá, ${agendamento.cliente.nome}! Tudo bem?
-
 seu agendamento esta confirmado 💈.
-
 Serviço: ${agendamento.servico.nome}✂️
 Data: ${dataFormatada}📆
 Horário: ${agendamento.horario}⏰
 Valor: ${formatarPreco(agendamento.servico.preco)}
-
 Aguardamos você!`;
 
     const url = `https://wa.me/${telefoneCompleto}?text=${encodeURIComponent(mensagem)}`;
@@ -371,6 +391,7 @@ Aguardamos você!`;
 
   function nomeDiaSemana(dataString: string) {
     const [ano, mes, dia] = dataString.split("-").map(Number);
+
     const data = new Date(ano, mes - 1, dia);
 
     return data.toLocaleDateString("pt-BR", {
@@ -407,7 +428,6 @@ Aguardamos você!`;
         return "bg-zinc-800 text-zinc-500";
     }
   }
-
   const agendamentosDoDia = agendamentos.filter(
     (agendamento) => agendamento.data === dataAtual,
   );
@@ -420,6 +440,49 @@ Aguardamos você!`;
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 lg:p-8">
+      <style>{`
+        @keyframes mb-barber-pop {
+          0% {
+            opacity: 0;
+            transform: scale(.35) rotate(-20deg);
+          }
+          70% {
+            opacity: 1;
+            transform: scale(1.12) rotate(6deg);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) rotate(0);
+          }
+        }
+
+        @keyframes mb-barber-card {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .mb-barber-success-icon {
+          animation: mb-barber-pop .55s cubic-bezier(.2,.8,.2,1) both;
+        }
+
+        .mb-barber-success-content {
+          animation: mb-barber-card .35s ease-out both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .mb-barber-success-icon,
+          .mb-barber-success-content {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
       {/* Cabeçalho */}
       <header className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
@@ -444,6 +507,7 @@ Aguardamos você!`;
             type="button"
             onClick={async () => {
               await carregarAgendamentos();
+
               if (dataAtual) await carregarBloqueios(dataAtual);
             }}
             disabled={carregando || carregandoBloqueios}
@@ -563,7 +627,6 @@ Aguardamos você!`;
                     </div>
                   </div>
                 </div>
-
                 {agendamento.status === "agendado" ? (
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row md:w-auto">
                     <button
@@ -600,6 +663,7 @@ Aguardamos você!`;
           )}
         </div>
       )}
+
       {/* Resumo do dia */}
       {dataAtual && (
         <div className="mt-5 flex min-w-0 flex-col gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
@@ -706,7 +770,6 @@ Aguardamos você!`;
           )}
         </div>
       )}
-
       {/* Modal de agendamento */}
       {agendamentoSelecionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">
@@ -801,10 +864,18 @@ Aguardamos você!`;
                     onClick={() =>
                       alterarStatus(agendamentoSelecionado.id, "confirmado")
                     }
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 font-semibold text-black transition hover:bg-green-400"
+                    disabled={confirmandoAtendimento}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-3 font-semibold text-black transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <Check size={18} />
-                    Confirmar atendimento
+                    {confirmandoAtendimento ? (
+                      <RefreshCw size={18} className="animate-spin" />
+                    ) : (
+                      <Check size={18} />
+                    )}
+
+                    {confirmandoAtendimento
+                      ? "Confirmando..."
+                      : "Confirmar atendimento"}
                   </button>
 
                   <button
@@ -821,9 +892,18 @@ Aguardamos você!`;
               )}
 
               {agendamentoSelecionado.status === "confirmado" && (
-                <div className="flex items-center justify-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-3 text-green-400">
-                  <Check size={18} />
-                  Atendimento realizado
+                <div className="mb-barber-success-content rounded-xl border border-green-500/20 bg-green-500/10 px-5 py-6 text-center">
+                  <div className="mb-barber-success-icon mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-zinc-950 shadow-lg shadow-green-500/20">
+                    <Check size={34} strokeWidth={3} />
+                  </div>
+
+                  <h3 className="mt-4 text-lg font-bold text-green-400">
+                    Atendimento confirmado!
+                  </h3>
+
+                  <p className="mt-1 text-sm text-green-200/70">
+                    O atendimento foi registrado com sucesso.
+                  </p>
                 </div>
               )}
 
@@ -845,7 +925,6 @@ Aguardamos você!`;
           </div>
         </div>
       )}
-
       {/* Modal de bloqueio */}
       {modalBloqueioAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">

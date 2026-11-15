@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-
 import {
   CalendarDays,
   Check,
@@ -13,7 +12,6 @@ import {
   Search,
   RefreshCw,
 } from "lucide-react";
-
 import { supabase } from "../../../lib/supabase";
 
 type Servico = {
@@ -81,6 +79,17 @@ function PublicBarber() {
 
   const [diaSelecionado, setDiaSelecionado] = useState<Dia | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState("");
+
+  // Atualiza o horário atual periodicamente para ocultar horários que já passaram.
+  const [agora, setAgora] = useState(() => new Date());
+
+  useEffect(() => {
+    const intervalo = window.setInterval(() => {
+      setAgora(new Date());
+    }, 30_000);
+
+    return () => window.clearInterval(intervalo);
+  }, []);
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -252,12 +261,21 @@ function PublicBarber() {
     const horariosGerados: string[] = [];
     const INTERVALO_GRADE = 5;
 
+    // Compara usando a data local do navegador, sem conversão para UTC.
+    const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+    const selecionouHoje = diaSelecionado.data === hoje;
+    const minutosAtuais = agora.getHours() * 60 + agora.getMinutes();
     for (
       let minutos = inicio;
       minutos + servicoSelecionado.duracao <= fim;
       minutos += INTERVALO_GRADE
     ) {
       const fimDoServico = minutos + servicoSelecionado.duracao;
+
+      // No dia atual, não oferece horários cujo início já passou.
+      if (selecionouHoje && minutos <= minutosAtuais) {
+        continue;
+      }
 
       if (horarioEstaOcupado(minutos, fimDoServico)) {
         continue;
@@ -485,10 +503,10 @@ function PublicBarber() {
       return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
     }
 
-    return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(
+    return `(${apenasNumeros.slice(
+      0,
       2,
-      7,
-    )}-${apenasNumeros.slice(7)}`;
+    )}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
   }
 
   function formatarData(data: string) {
@@ -514,9 +532,9 @@ function PublicBarber() {
 
     return nomes[statusNormalizado] || status;
   }
-
   function statusPodeCancelar(status: string) {
     const statusNormalizado = status.toLowerCase();
+
     return (
       statusNormalizado === "agendado" || statusNormalizado === "confirmado"
     );
@@ -701,6 +719,16 @@ function PublicBarber() {
     const inicioSelecionado = horarioParaMinutos(horarioSelecionado);
     const fimSelecionado = inicioSelecionado + servicoSelecionado.duracao;
 
+    const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+    const minutosAtuais = agora.getHours() * 60 + agora.getMinutes();
+
+    // Impede reservar um horário que passou enquanto o cliente preenchia os dados.
+    if (diaSelecionado.data === hoje && inicioSelecionado <= minutosAtuais) {
+      setHorarioSelecionado("");
+      setErro("Esse horário já passou. Escolha outro horário.");
+      return;
+    }
+
     if (horarioEstaOcupado(inicioSelecionado, fimSelecionado)) {
       setErro("Esse horário acabou de ser ocupado. Escolha outro.");
       await carregarDisponibilidade(diaSelecionado.data);
@@ -777,7 +805,6 @@ function PublicBarber() {
       };
 
       setAgendamentoCriado(novoAgendamento);
-
       setHorariosOcupados((anteriores) => [
         ...anteriores,
         {
@@ -852,14 +879,11 @@ function PublicBarber() {
     setServicoSelecionado(null);
     setDiaSelecionado(null);
     setHorarioSelecionado("");
-
     setNome("");
     setTelefone("");
-
     setAgendamentoCriado(null);
     setCancelado(false);
     setErro("");
-
     setHorariosOcupados([]);
     setBloqueiosAgenda([]);
   }
@@ -961,6 +985,7 @@ function PublicBarber() {
               ) : (
                 <Search size={18} />
               )}
+
               {consultandoAgendamentos ? "Consultando..." : "Consultar"}
             </button>
           </form>
@@ -997,6 +1022,7 @@ function PublicBarber() {
 
               {agendamentosConsultados.map((agendamento) => {
                 const podeCancelar = statusPodeCancelar(agendamento.status);
+
                 const cancelamentoEmAndamento =
                   cancelandoConsultaId === agendamento.agendamento_id;
 
@@ -1011,6 +1037,7 @@ function PublicBarber() {
                           <h4 className="font-semibold text-lg">
                             {agendamento.servico}
                           </h4>
+
                           <p className="text-sm text-zinc-400 mt-1">
                             Agendamento #{agendamento.agendamento_id}
                           </p>
@@ -1031,6 +1058,7 @@ function PublicBarber() {
                         <p className="text-sm text-zinc-300">
                           Valor:{" "}
                           <strong>
+                            {" "}
                             R$ {Number(agendamento.preco).toFixed(2)}
                           </strong>
                         </p>
@@ -1066,6 +1094,7 @@ function PublicBarber() {
                           ) : (
                             <X size={17} />
                           )}
+
                           {cancelamentoEmAndamento
                             ? "Cancelando..."
                             : "Cancelar agendamento"}
@@ -1158,9 +1187,11 @@ function PublicBarber() {
                     }`}
                   >
                     <div className="text-sm">{dia.nome}</div>
+
                     <div className="text-xs text-zinc-500 mt-2">
                       {dia.data.split("-").reverse().join("/")}
                     </div>
+
                     {!dia.aberto && <div className="text-xs mt-2">Fechado</div>}
                   </button>
                 );
@@ -1219,6 +1250,7 @@ function PublicBarber() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-zinc-400 mb-2">Nome</label>
+
                 <input
                   value={nome}
                   onChange={(event) => setNome(event.target.value)}
@@ -1233,6 +1265,7 @@ function PublicBarber() {
                 <label className="block text-sm text-zinc-400 mb-2">
                   Telefone
                 </label>
+
                 <input
                   value={telefone}
                   onChange={(event) =>
@@ -1265,94 +1298,132 @@ function PublicBarber() {
 
       {/* MODAL DE SUCESSO */}
       {agendamentoCriado && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full">
-            {!cancelado ? (
-              <>
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="bg-green-500/10 text-green-400 rounded-full p-3">
+        <>
+          <style>{`
+            @keyframes mb-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes mb-card-in { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes mb-check-pop { 0% { opacity: 0; transform: scale(.25) rotate(-25deg); } 65% { opacity: 1; transform: scale(1.18) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+            @keyframes mb-ring-out { 0% { opacity: .65; transform: scale(.7); } 100% { opacity: 0; transform: scale(1.65); } }</strong>
+            .mb-success-overlay {
+              animation: mb-overlay-in .22s ease-out both;
+            }
+
+            .mb-success-card {
+              animation: mb-card-in .38s cubic-bezier(.2,.8,.2,1) both;
+            }
+
+            .mb-success-icon {
+              animation: mb-check-pop .55s cubic-bezier(.2,.8,.2,1) .08s both;
+            }
+
+            .mb-success-ring {
+              animation: mb-ring-out .8s ease-out .12s both;
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+              .mb-success-overlay,
+              .mb-success-card,
+              .mb-success-icon,
+              .mb-success-ring {
+                animation: none !important;
+              }
+            }
+          `}</style>
+
+          <div className="mb-success-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+            <div className="mb-success-card w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+              {!cancelado ? (
+                <>
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-400">
+                      <span className="mb-success-ring absolute inset-0 rounded-full border-2 border-green-400/70" />
+
+                      <span className="mb-success-icon relative flex h-10 w-10 items-center justify-center rounded-full bg-green-500 text-zinc-950 shadow-lg shadow-green-500/20">
+                        <Check size={25} strokeWidth={3} />
+                      </span>
+                    </div>
+
+                    <div>
+                      <h2 className="text-xl font-bold">
+                        Agendamento realizado!
+                      </h2>
+
+                      <p className="text-sm text-zinc-400">
+                        Seu horário foi reservado.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl bg-zinc-950 p-4">
+                    <div>
+                      <span className="text-sm text-zinc-500">Serviço</span>
+                      <p className="font-medium">{servicoSelecionado?.nome}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-sm text-zinc-500">Data</span>
+                      <p className="font-medium">
+                        {diaSelecionado?.data.split("-").reverse().join("/")}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-sm text-zinc-500">Horário</span>
+                      <p className="font-medium">{horarioSelecionado}</p>
+                    </div>
+                  </div>
+
+                  {erro && (
+                    <div className="mt-4 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
+                      {erro}
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex flex-col gap-3">
+                    <button
+                      onClick={cancelarAgendamento}
+                      disabled={cancelando}
+                      className="w-full rounded-xl border border-red-900 py-3 text-red-400 transition hover:bg-red-950/30 disabled:opacity-50"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <X size={18} />
+                        {cancelando ? "Cancelando..." : "Cancelar agendamento"}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={fecharModal}
+                      className="w-full rounded-xl bg-white py-3 font-semibold text-black transition hover:bg-zinc-200"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="mx-auto w-fit rounded-full bg-zinc-800 p-3 text-zinc-300">
                     <Check />
                   </div>
 
-                  <div>
-                    <h2 className="text-xl font-bold">
-                      Agendamento realizado!
-                    </h2>
-                    <p className="text-sm text-zinc-400">
-                      Seu horário foi reservado.
-                    </p>
-                  </div>
-                </div>
+                  <h2 className="mt-4 text-xl font-bold">
+                    Agendamento cancelado
+                  </h2>
 
-                <div className="space-y-3 bg-zinc-950 rounded-xl p-4">
-                  <div>
-                    <span className="text-zinc-500 text-sm">Serviço</span>
-                    <p className="font-medium">{servicoSelecionado?.nome}</p>
-                  </div>
-
-                  <div>
-                    <span className="text-zinc-500 text-sm">Data</span>
-                    <p className="font-medium">
-                      {diaSelecionado?.data.split("-").reverse().join("/")}
-                    </p>
-                  </div>
-
-                  <div>
-                    <span className="text-zinc-500 text-sm">Horário</span>
-                    <p className="font-medium">{horarioSelecionado}</p>
-                  </div>
-                </div>
-
-                {erro && (
-                  <div className="mt-4 bg-red-950/40 border border-red-900 text-red-300 rounded-xl p-4 text-sm">
-                    {erro}
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-3 mt-5">
-                  <button
-                    onClick={cancelarAgendamento}
-                    disabled={cancelando}
-                    className="w-full border border-red-900 text-red-400 rounded-xl py-3 hover:bg-red-950/30 disabled:opacity-50"
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      <X size={18} />
-                      {cancelando ? "Cancelando..." : "Cancelar agendamento"}
-                    </span>
-                  </button>
+                  <p className="mt-2 text-zinc-400">
+                    O horário voltou a ficar disponível.
+                  </p>
 
                   <button
                     onClick={fecharModal}
-                    className="w-full bg-white text-black rounded-xl py-3 font-semibold hover:bg-zinc-200"
+                    className="mt-6 w-full rounded-xl bg-white py-3 font-semibold text-black"
                   >
                     Fechar
                   </button>
                 </div>
-              </>
-            ) : (
-              <div className="text-center">
-                <div className="mx-auto bg-zinc-800 text-zinc-300 rounded-full p-3 w-fit">
-                  <Check />
-                </div>
-
-                <h2 className="text-xl font-bold mt-4">
-                  Agendamento cancelado
-                </h2>
-
-                <p className="text-zinc-400 mt-2">
-                  O horário voltou a ficar disponível.
-                </p>
-
-                <button
-                  onClick={fecharModal}
-                  className="w-full bg-white text-black rounded-xl py-3 font-semibold mt-6"
-                >
-                  Fechar
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ERRO GERAL */}
