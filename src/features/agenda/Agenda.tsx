@@ -436,7 +436,19 @@ Aguardamos você!`;
     (agendamento) => agendamento.status !== "cancelado",
   ).length;
 
-  const horariosDoDia = agendamentosDoDia;
+  const horariosDoDia = [...agendamentosDoDia].sort((a, b) => {
+    const prioridade = {
+      agendado: 1,
+      confirmado: 2,
+      cancelado: 3,
+    };
+
+    if (prioridade[a.status] !== prioridade[b.status]) {
+      return prioridade[a.status] - prioridade[b.status];
+    }
+
+    return a.horario.localeCompare(b.horario);
+  });
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-full overflow-x-hidden p-4 sm:p-6 lg:p-8">
@@ -847,9 +859,7 @@ Aguardamos você!`;
                     <p className="font-semibold text-amber-400">Atenção</p>
 
                     <p className="mt-1 text-sm leading-relaxed text-amber-200/80">
-                      Confirme somente depois de realizar o corte. Ao confirmar,
-                      este atendimento será registrado no histórico do cliente e
-                      no financeiro.
+                      Confirme somente depois de realizar o corte.
                     </p>
                   </div>
                 </div>
