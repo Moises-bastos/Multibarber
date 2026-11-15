@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+
 import {
   CalendarDays,
   Check,
@@ -11,7 +12,10 @@ import {
   X,
   Search,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+
 import { supabase } from "../../../lib/supabase";
 
 type Servico = {
@@ -80,16 +84,12 @@ function PublicBarber() {
   const [diaSelecionado, setDiaSelecionado] = useState<Dia | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState("");
 
-  // Atualiza o horário atual periodicamente para ocultar horários que já passaram.
-  const [agora, setAgora] = useState(() => new Date());
+  const [mesCalendario, setMesCalendario] = useState(() => {
+    const hoje = new Date();
+    return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  });
 
-  useEffect(() => {
-    const intervalo = window.setInterval(() => {
-      setAgora(new Date());
-    }, 30_000);
-
-    return () => window.clearInterval(intervalo);
-  }, []);
+  const [calendarioAberto, setCalendarioAberto] = useState(false);
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -154,6 +154,7 @@ function PublicBarber() {
     )}`;
   }
 
+  // Mantém os sete cards de dias que já existiam.
   function gerarDias(): Dia[] {
     const dias: Dia[] = [];
     const hoje = new Date();
@@ -175,7 +176,10 @@ function PublicBarber() {
       dias.push({
         nome: nomesDias[diaSemana],
         data: dataFormatada,
-        aberto: funcionamento?.aberto ?? false,
+        aberto:
+          diaSemana !== 0 &&
+          diaSemana !== 6 &&
+          (funcionamento?.aberto ?? false),
       });
     }
 
@@ -183,6 +187,57 @@ function PublicBarber() {
   }
 
   const dias = gerarDias();
+
+  function formatarDataISO(data: Date): string {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  const hojeISO = formatarDataISO(new Date());
+
+  const primeiroDiaMes = new Date(
+    mesCalendario.getFullYear(),
+    mesCalendario.getMonth(),
+    1,
+  );
+
+  const deslocamentoCalendario = (primeiroDiaMes.getDay() + 6) % 7;
+
+  const quantidadeDiasMes = new Date(
+    mesCalendario.getFullYear(),
+    mesCalendario.getMonth() + 1,
+    0,
+  ).getDate();
+
+  const diasCalendario: (Date | null)[] = [
+    ...Array.from({ length: deslocamentoCalendario }, () => null),
+    ...Array.from(
+      { length: quantidadeDiasMes },
+      (_, indice) =>
+        new Date(
+          mesCalendario.getFullYear(),
+          mesCalendario.getMonth(),
+          indice + 1,
+        ),
+    ),
+  ];
+
+  function dataPodeSerSelecionada(data: Date): boolean {
+    const dataISO = formatarDataISO(data);
+    const diaSemana = data.getDay();
+
+    if (dataISO < hojeISO || diaSemana === 0 || diaSemana === 6) {
+      return false;
+    }
+
+    const funcionamento = horariosFuncionamento.find(
+      (horario) => horario.dia_semana === diaSemana,
+    );
+
+    return funcionamento?.aberto ?? false;
+  }
 
   function existeConflito(
     inicioCandidato: number,
@@ -261,21 +316,12 @@ function PublicBarber() {
     const horariosGerados: string[] = [];
     const INTERVALO_GRADE = 5;
 
-    // Compara usando a data local do navegador, sem conversão para UTC.
-    const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
-    const selecionouHoje = diaSelecionado.data === hoje;
-    const minutosAtuais = agora.getHours() * 60 + agora.getMinutes();
     for (
       let minutos = inicio;
       minutos + servicoSelecionado.duracao <= fim;
       minutos += INTERVALO_GRADE
     ) {
       const fimDoServico = minutos + servicoSelecionado.duracao;
-
-      // No dia atual, não oferece horários cujo início já passou.
-      if (selecionouHoje && minutos <= minutosAtuais) {
-        continue;
-      }
 
       if (horarioEstaOcupado(minutos, fimDoServico)) {
         continue;
@@ -473,15 +519,48 @@ function PublicBarber() {
     }
   }
 
+  function selecionarData(data: string) {
+    const dataObj = new Date(`${data}T12:00:00`);
+    const diaSemana = dataObj.getDay();
+
+    const funcionamento = horariosFuncionamento.find(
+      (horario) => horario.dia_semana === diaSemana,
+    );
+
+    if (
+      data < hojeISO ||
+      diaSemana === 0 ||
+      diaSemana === 6 ||
+      !funcionamento?.aberto
+    ) {
+      return;
+    }
+
+    const dia: Dia = {
+      nome: nomesDias[diaSemana],
+      data,
+      aberto: true,
+    };
+
+    setDiaSelecionado(dia);
+    setHorarioSelecionado("");
+    setErro("");
+    carregarDisponibilidade(data);
+  }
+
   function selecionarDia(dia: Dia) {
     if (!dia.aberto) {
       return;
     }
 
-    setDiaSelecionado(dia);
-    setHorarioSelecionado("");
-    setErro("");
-    carregarDisponibilidade(dia.data);
+    selecionarData(dia.data);
+  }
+
+  function mudarMesCalendario(direcao: number) {
+    setMesCalendario(
+      (mesAtual) =>
+        new Date(mesAtual.getFullYear(), mesAtual.getMonth() + direcao, 1),
+    );
   }
 
   useEffect(() => {
@@ -503,10 +582,10 @@ function PublicBarber() {
       return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
     }
 
-    return `(${apenasNumeros.slice(
-      0,
+    return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(
       2,
-    )}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
+      7,
+    )}-${apenasNumeros.slice(7)}`;
   }
 
   function formatarData(data: string) {
@@ -532,9 +611,9 @@ function PublicBarber() {
 
     return nomes[statusNormalizado] || status;
   }
+
   function statusPodeCancelar(status: string) {
     const statusNormalizado = status.toLowerCase();
-
     return (
       statusNormalizado === "agendado" || statusNormalizado === "confirmado"
     );
@@ -716,18 +795,29 @@ function PublicBarber() {
       return;
     }
 
-    const inicioSelecionado = horarioParaMinutos(horarioSelecionado);
-    const fimSelecionado = inicioSelecionado + servicoSelecionado.duracao;
+    const dataSelecionada = new Date(`${diaSelecionado.data}T12:00:00`);
+    const diaSemanaSelecionado = dataSelecionada.getDay();
 
-    const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
-    const minutosAtuais = agora.getHours() * 60 + agora.getMinutes();
+    const funcionamentoSelecionado = horariosFuncionamento.find(
+      (horario) => horario.dia_semana === diaSemanaSelecionado,
+    );
 
-    // Impede reservar um horário que passou enquanto o cliente preenchia os dados.
-    if (diaSelecionado.data === hoje && inicioSelecionado <= minutosAtuais) {
+    if (
+      diaSelecionado.data < hojeISO ||
+      diaSemanaSelecionado === 0 ||
+      diaSemanaSelecionado === 6 ||
+      !funcionamentoSelecionado?.aberto
+    ) {
+      setErro(
+        "Escolha uma data válida, de segunda a sexta, em que a barbearia esteja aberta.",
+      );
+      setDiaSelecionado(null);
       setHorarioSelecionado("");
-      setErro("Esse horário já passou. Escolha outro horário.");
       return;
     }
+
+    const inicioSelecionado = horarioParaMinutos(horarioSelecionado);
+    const fimSelecionado = inicioSelecionado + servicoSelecionado.duracao;
 
     if (horarioEstaOcupado(inicioSelecionado, fimSelecionado)) {
       setErro("Esse horário acabou de ser ocupado. Escolha outro.");
@@ -805,6 +895,7 @@ function PublicBarber() {
       };
 
       setAgendamentoCriado(novoAgendamento);
+
       setHorariosOcupados((anteriores) => [
         ...anteriores,
         {
@@ -879,13 +970,17 @@ function PublicBarber() {
     setServicoSelecionado(null);
     setDiaSelecionado(null);
     setHorarioSelecionado("");
+
     setNome("");
     setTelefone("");
+
     setAgendamentoCriado(null);
     setCancelado(false);
     setErro("");
+
     setHorariosOcupados([]);
     setBloqueiosAgenda([]);
+    setCalendarioAberto(false);
   }
 
   if (carregando || carregandoFuncionamento) {
@@ -985,7 +1080,6 @@ function PublicBarber() {
               ) : (
                 <Search size={18} />
               )}
-
               {consultandoAgendamentos ? "Consultando..." : "Consultar"}
             </button>
           </form>
@@ -1022,28 +1116,19 @@ function PublicBarber() {
 
               {agendamentosConsultados.map((agendamento) => {
                 const podeCancelar = statusPodeCancelar(agendamento.status);
-
                 const cancelamentoEmAndamento =
                   cancelandoConsultaId === agendamento.agendamento_id;
 
                 return (
                   <article
                     key={agendamento.agendamento_id}
-                    className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 md:p-5"
+                    className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
                   >
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                      <div className="space-y-3">
-                        <div>
-                          <h4 className="font-semibold text-lg">
-                            {agendamento.servico}
-                          </h4>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold">{agendamento.servico}</h4>
 
-                          <p className="text-sm text-zinc-400 mt-1">
-                            Agendamento #{agendamento.agendamento_id}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-300">
+                        <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
                           <span className="flex items-center gap-2">
                             <CalendarDays size={16} />
                             {formatarData(agendamento.data)}
@@ -1058,7 +1143,6 @@ function PublicBarber() {
                         <p className="text-sm text-zinc-300">
                           Valor:{" "}
                           <strong>
-                            {" "}
                             R$ {Number(agendamento.preco).toFixed(2)}
                           </strong>
                         </p>
@@ -1094,7 +1178,6 @@ function PublicBarber() {
                           ) : (
                             <X size={17} />
                           )}
-
                           {cancelamentoEmAndamento
                             ? "Cancelando..."
                             : "Cancelar agendamento"}
@@ -1167,8 +1250,110 @@ function PublicBarber() {
             <div className="flex items-center gap-3 mb-6">
               <CalendarDays />
               <h2 className="text-2xl font-bold">Escolha o dia</h2>
+
+              {/* BOTÃO DO MINI-CALENDÁRIO */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCalendarioAberto(!calendarioAberto)}
+                  aria-label="Escolher outra data"
+                  aria-expanded={calendarioAberto}
+                  className="ml-2 flex items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-300 hover:bg-zinc-800 transition"
+                >
+                  <CalendarDays size={19} />
+                </button>
+
+                {/* CALENDÁRIO COMPACTO */}
+                {calendarioAberto && (
+                  <div className="absolute left-0 top-12 z-40 w-72 rounded-xl border border-zinc-700 bg-zinc-900 p-3 shadow-2xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <button
+                        type="button"
+                        onClick={() => mudarMesCalendario(-1)}
+                        disabled={
+                          mesCalendario.getFullYear() ===
+                            new Date().getFullYear() &&
+                          mesCalendario.getMonth() === new Date().getMonth()
+                        }
+                        className="rounded-lg p-1.5 hover:bg-zinc-800 disabled:opacity-30"
+                        aria-label="Mês anterior"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+
+                      <span className="text-sm font-semibold capitalize">
+                        {mesCalendario.toLocaleDateString("pt-BR", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => mudarMesCalendario(1)}
+                        className="rounded-lg p-1.5 hover:bg-zinc-800"
+                        aria-label="Próximo mês"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                      {["S", "T", "Q", "Q", "S", "S", "D"].map(
+                        (nomeDia, indice) => (
+                          <span
+                            key={indice}
+                            className="py-1 text-xs text-zinc-500"
+                          >
+                            {nomeDia}
+                          </span>
+                        ),
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {diasCalendario.map((data, indice) => {
+                        if (!data) {
+                          return <div key={`vazio-${indice}`} />;
+                        }
+
+                        const dataISO = formatarDataISO(data);
+                        const selecionado = diaSelecionado?.data === dataISO;
+                        const disponivel = dataPodeSerSelecionada(data);
+
+                        return (
+                          <button
+                            key={dataISO}
+                            type="button"
+                            disabled={!disponivel}
+                            onClick={() => {
+                              selecionarData(dataISO);
+                              setCalendarioAberto(false);
+                            }}
+                            aria-pressed={selecionado}
+                            className={`h-8 w-8 mx-auto rounded-lg text-xs transition ${
+                              !disponivel
+                                ? "text-zinc-700 cursor-not-allowed"
+                                : selecionado
+                                  ? "bg-white text-black font-bold"
+                                  : "text-zinc-200 hover:bg-zinc-700"
+                            }`}
+                          >
+                            {data.getDate()}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="text-[11px] text-zinc-500 mt-3 text-center">
+                      Selecione um dia disponível
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
+            {/* OS SETE CARDS ORIGINAIS */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {dias.map((dia) => {
                 const selecionado = diaSelecionado?.data === dia.data;
@@ -1187,11 +1372,9 @@ function PublicBarber() {
                     }`}
                   >
                     <div className="text-sm">{dia.nome}</div>
-
                     <div className="text-xs text-zinc-500 mt-2">
                       {dia.data.split("-").reverse().join("/")}
                     </div>
-
                     {!dia.aberto && <div className="text-xs mt-2">Fechado</div>}
                   </button>
                 );
@@ -1250,7 +1433,6 @@ function PublicBarber() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-zinc-400 mb-2">Nome</label>
-
                 <input
                   value={nome}
                   onChange={(event) => setNome(event.target.value)}
@@ -1265,7 +1447,6 @@ function PublicBarber() {
                 <label className="block text-sm text-zinc-400 mb-2">
                   Telefone
                 </label>
-
                 <input
                   value={telefone}
                   onChange={(event) =>
@@ -1296,134 +1477,167 @@ function PublicBarber() {
         )}
       </main>
 
+      {/* ANIMAÇÕES DO MODAL DE SUCESSO */}
+      <style>{`
+        @keyframes mb-overlay-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes mb-card-in {
+          from {
+            opacity: 0;
+            transform: translateY(25px) scale(0.92);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes mb-check-pop {
+          0% {
+            opacity: 0;
+            transform: scale(0.3);
+          }
+          70% {
+            opacity: 1;
+            transform: scale(1.2);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        @keyframes mb-ring-out {
+          0% {
+            opacity: 0.8;
+            transform: scale(0.7);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.8);
+          }
+        }
+
+        .mb-success-overlay {
+          animation: mb-overlay-in 0.3s ease-out;
+        }
+
+        .mb-success-card {
+          animation: mb-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .mb-success-icon {
+          position: relative;
+          animation: mb-check-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+        }
+
+        .mb-success-ring {
+          position: absolute;
+          inset: 0;
+          border: 2px solid #22c55e;
+          border-radius: 9999px;
+          animation: mb-ring-out 0.8s ease-out 0.3s both;
+          pointer-events: none;
+        }
+      `}</style>
+
       {/* MODAL DE SUCESSO */}
       {agendamentoCriado && (
-        <>
-          <style>{`
-            @keyframes mb-overlay-in { from { opacity: 0; } to { opacity: 1; } }
-            @keyframes mb-card-in { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
-            @keyframes mb-check-pop { 0% { opacity: 0; transform: scale(.25) rotate(-25deg); } 65% { opacity: 1; transform: scale(1.18) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
-            @keyframes mb-ring-out { 0% { opacity: .65; transform: scale(.7); } 100% { opacity: 0; transform: scale(1.65); } }</strong>
-            .mb-success-overlay {
-              animation: mb-overlay-in .22s ease-out both;
-            }
-
-            .mb-success-card {
-              animation: mb-card-in .38s cubic-bezier(.2,.8,.2,1) both;
-            }
-
-            .mb-success-icon {
-              animation: mb-check-pop .55s cubic-bezier(.2,.8,.2,1) .08s both;
-            }
-
-            .mb-success-ring {
-              animation: mb-ring-out .8s ease-out .12s both;
-            }
-
-            @media (prefers-reduced-motion: reduce) {
-              .mb-success-overlay,
-              .mb-success-card,
-              .mb-success-icon,
-              .mb-success-ring {
-                animation: none !important;
-              }
-            }
-          `}</style>
-
-          <div className="mb-success-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
-            <div className="mb-success-card w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-              {!cancelado ? (
-                <>
-                  <div className="mb-5 flex items-center gap-3">
-                    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-400">
-                      <span className="mb-success-ring absolute inset-0 rounded-full border-2 border-green-400/70" />
-
-                      <span className="mb-success-icon relative flex h-10 w-10 items-center justify-center rounded-full bg-green-500 text-zinc-950 shadow-lg shadow-green-500/20">
-                        <Check size={25} strokeWidth={3} />
-                      </span>
-                    </div>
-
-                    <div>
-                      <h2 className="text-xl font-bold">
-                        Agendamento realizado!
-                      </h2>
-
-                      <p className="text-sm text-zinc-400">
-                        Seu horário foi reservado.
-                      </p>
-                    </div>
+        <div className="mb-success-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
+          <div className="mb-success-card bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full">
+            {!cancelado ? (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="mb-success-icon bg-green-500/10 text-green-400 rounded-full p-3">
+                    <span className="mb-success-ring" />
+                    <Check size={28} strokeWidth={3} />
                   </div>
 
-                  <div className="space-y-3 rounded-xl bg-zinc-950 p-4">
-                    <div>
-                      <span className="text-sm text-zinc-500">Serviço</span>
-                      <p className="font-medium">{servicoSelecionado?.nome}</p>
-                    </div>
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      Agendamento realizado!
+                    </h2>
+                    <p className="text-sm text-zinc-400">
+                      Seu horário foi reservado.
+                    </p>
+                  </div>
+                </div>
 
-                    <div>
-                      <span className="text-sm text-zinc-500">Data</span>
-                      <p className="font-medium">
-                        {diaSelecionado?.data.split("-").reverse().join("/")}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="text-sm text-zinc-500">Horário</span>
-                      <p className="font-medium">{horarioSelecionado}</p>
-                    </div>
+                <div className="space-y-3 bg-zinc-950 rounded-xl p-4">
+                  <div>
+                    <span className="text-zinc-500 text-sm">Serviço</span>
+                    <p className="font-medium">{servicoSelecionado?.nome}</p>
                   </div>
 
-                  {erro && (
-                    <div className="mt-4 rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
-                      {erro}
-                    </div>
-                  )}
-
-                  <div className="mt-5 flex flex-col gap-3">
-                    <button
-                      onClick={cancelarAgendamento}
-                      disabled={cancelando}
-                      className="w-full rounded-xl border border-red-900 py-3 text-red-400 transition hover:bg-red-950/30 disabled:opacity-50"
-                    >
-                      <span className="flex items-center justify-center gap-2">
-                        <X size={18} />
-                        {cancelando ? "Cancelando..." : "Cancelar agendamento"}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={fecharModal}
-                      className="w-full rounded-xl bg-white py-3 font-semibold text-black transition hover:bg-zinc-200"
-                    >
-                      Fechar
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center">
-                  <div className="mx-auto w-fit rounded-full bg-zinc-800 p-3 text-zinc-300">
-                    <Check />
+                  <div>
+                    <span className="text-zinc-500 text-sm">Data</span>
+                    <p className="font-medium">
+                      {diaSelecionado?.data.split("-").reverse().join("/")}
+                    </p>
                   </div>
 
-                  <h2 className="mt-4 text-xl font-bold">
-                    Agendamento cancelado
-                  </h2>
+                  <div>
+                    <span className="text-zinc-500 text-sm">Horário</span>
+                    <p className="font-medium">{horarioSelecionado}</p>
+                  </div>
+                </div>
 
-                  <p className="mt-2 text-zinc-400">
-                    O horário voltou a ficar disponível.
-                  </p>
+                {erro && (
+                  <div className="mt-4 bg-red-950/40 border border-red-900 text-red-300 rounded-xl p-4 text-sm">
+                    {erro}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3 mt-5">
+                  <button
+                    onClick={cancelarAgendamento}
+                    disabled={cancelando}
+                    className="w-full border border-red-900 text-red-400 rounded-xl py-3 hover:bg-red-950/30 disabled:opacity-50"
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <X size={18} />
+                      {cancelando ? "Cancelando..." : "Cancelar agendamento"}
+                    </span>
+                  </button>
 
                   <button
                     onClick={fecharModal}
-                    className="mt-6 w-full rounded-xl bg-white py-3 font-semibold text-black"
+                    className="w-full bg-white text-black rounded-xl py-3 font-semibold hover:bg-zinc-200"
                   >
                     Fechar
                   </button>
                 </div>
-              )}
-            </div>
+              </>
+            ) : (
+              <div className="text-center">
+                <div className="mx-auto bg-zinc-800 text-zinc-300 rounded-full p-3 w-fit">
+                  <Check />
+                </div>
+
+                <h2 className="text-xl font-bold mt-4">
+                  Agendamento cancelado
+                </h2>
+
+                <p className="text-zinc-400 mt-2">
+                  O horário voltou a ficar disponível.
+                </p>
+
+                <button
+                  onClick={fecharModal}
+                  className="w-full bg-white text-black rounded-xl py-3 font-semibold mt-6"
+                >
+                  Fechar
+                </button>
+              </div>
+            )}
           </div>
-        </>
+        </div>
       )}
 
       {/* ERRO GERAL */}

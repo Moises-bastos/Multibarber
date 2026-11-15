@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Clock,
   Scissors,
@@ -45,7 +48,17 @@ type BloqueioAgenda = {
 type TipoBloqueio = "horario" | "dia";
 
 function Agenda() {
-  const [diaSelecionado, setDiaSelecionado] = useState(0);
+  function obterDataISO(data: Date) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  const [dataSelecionada, setDataSelecionada] = useState(() =>
+    obterDataISO(new Date()),
+  );
 
   const [agendamentoSelecionado, setAgendamentoSelecionado] =
     useState<Agendamento | null>(null);
@@ -53,7 +66,6 @@ function Agenda() {
   const [confirmandoAtendimento, setConfirmandoAtendimento] = useState(false);
 
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
-  const [dias, setDias] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroAgenda, setErroAgenda] = useState("");
 
@@ -67,24 +79,6 @@ function Agenda() {
   const [horaFim, setHoraFim] = useState("");
   const [motivo, setMotivo] = useState("");
   const [salvandoBloqueio, setSalvandoBloqueio] = useState(false);
-
-  function gerarProximosDias() {
-    const datas: string[] = [];
-    const hoje = new Date();
-
-    for (let i = 0; i < 7; i++) {
-      const data = new Date(hoje);
-      data.setDate(hoje.getDate() + i);
-
-      const ano = data.getFullYear();
-      const mes = String(data.getMonth() + 1).padStart(2, "0");
-      const dia = String(data.getDate()).padStart(2, "0");
-
-      datas.push(`${ano}-${mes}-${dia}`);
-    }
-
-    return datas;
-  }
 
   async function carregarAgendamentos() {
     try {
@@ -196,13 +190,23 @@ function Agenda() {
   }
 
   useEffect(() => {
-    const proximosDias = gerarProximosDias();
-
-    setDias(proximosDias);
     carregarAgendamentos();
   }, []);
 
-  const dataAtual = dias[diaSelecionado];
+  const dataAtual = dataSelecionada;
+
+  function alterarDia(quantidade: number) {
+    const [ano, mes, dia] = dataAtual.split("-").map(Number);
+    const novaData = new Date(ano, mes - 1, dia);
+
+    novaData.setDate(novaData.getDate() + quantidade);
+
+    setDataSelecionada(obterDataISO(novaData));
+  }
+
+  function irParaHoje() {
+    setDataSelecionada(obterDataISO(new Date()));
+  }
 
   useEffect(() => {
     if (dataAtual) {
@@ -251,6 +255,7 @@ function Agenda() {
       setConfirmandoAtendimento(false);
     }
   }
+
   function abrirModalBloqueio() {
     setDataBloqueio(dataAtual || "");
     setTipoBloqueio("horario");
@@ -349,7 +354,6 @@ function Agenda() {
 
   function formatarData(dataString: string) {
     const [ano, mes, dia] = dataString.split("-").map(Number);
-
     const data = new Date(ano, mes - 1, dia);
 
     return data.toLocaleDateString("pt-BR", {
@@ -373,7 +377,6 @@ function Agenda() {
       : `55${telefone}`;
 
     const [ano, mes, dia] = agendamento.data.split("-");
-
     const dataFormatada = `${dia}/${mes}/${ano}`;
 
     const mensagem = `Olá, ${agendamento.cliente.nome}! Tudo bem?
@@ -391,7 +394,6 @@ Aguardamos você!`;
 
   function nomeDiaSemana(dataString: string) {
     const [ano, mes, dia] = dataString.split("-").map(Number);
-
     const data = new Date(ano, mes - 1, dia);
 
     return data.toLocaleDateString("pt-BR", {
@@ -428,6 +430,7 @@ Aguardamos você!`;
         return "bg-zinc-800 text-zinc-500";
     }
   }
+
   const agendamentosDoDia = agendamentos.filter(
     (agendamento) => agendamento.data === dataAtual,
   );
@@ -537,30 +540,52 @@ Aguardamos você!`;
         </div>
       </header>
 
-      {/* Seleção dos próximos sete dias */}
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:gap-3 md:grid-cols-4 lg:grid-cols-7">
-        {dias.map((data, index) => {
-          const diaSemana = primeiraMaiuscula(nomeDiaSemana(data));
+      {/* Navegação por qualquer data */}
+      <div className="mt-4 flex flex-col gap-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => alterarDia(-1)}
+            aria-label="Dia anterior"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 transition hover:border-amber-500 hover:text-amber-500"
+          >
+            <ChevronLeft size={20} />
+          </button>
 
-          return (
-            <button
-              key={data}
-              type="button"
-              onClick={() => setDiaSelecionado(index)}
-              className={`min-w-0 break-words rounded-xl border p-3 text-left transition sm:p-4 ${
-                diaSelecionado === index
-                  ? "border-amber-500 bg-amber-500 text-black"
-                  : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-white"
-              }`}
-            >
-              <p className="break-words text-sm">{diaSemana}</p>
+          <button
+            type="button"
+            onClick={irParaHoje}
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-medium text-zinc-300 transition hover:border-amber-500 hover:text-amber-500"
+          >
+            Hoje
+          </button>
 
-              <p className="mt-1 break-words text-sm font-semibold sm:text-base">
-                {formatarData(data)}
-              </p>
-            </button>
-          );
-        })}
+          <button
+            type="button"
+            onClick={() => alterarDia(1)}
+            aria-label="Próximo dia"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 transition hover:border-amber-500 hover:text-amber-500"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        <div className="w-full sm:w-auto">
+          <label
+            htmlFor="data-agenda"
+            className="mb-2 block text-sm font-medium text-zinc-400"
+          >
+            Escolher data
+          </label>
+
+          <input
+            id="data-agenda"
+            type="date"
+            value={dataSelecionada}
+            onChange={(event) => setDataSelecionada(event.target.value)}
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-white outline-none transition focus:border-amber-500 sm:w-auto"
+          />
+        </div>
       </div>
 
       {erroAgenda && (
@@ -639,6 +664,7 @@ Aguardamos você!`;
                     </div>
                   </div>
                 </div>
+
                 {agendamento.status === "agendado" ? (
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row md:w-auto">
                     <button
@@ -782,6 +808,7 @@ Aguardamos você!`;
           )}
         </div>
       )}
+
       {/* Modal de agendamento */}
       {agendamentoSelecionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">
@@ -935,6 +962,7 @@ Aguardamos você!`;
           </div>
         </div>
       )}
+
       {/* Modal de bloqueio */}
       {modalBloqueioAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-3 sm:p-4">
