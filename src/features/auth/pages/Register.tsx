@@ -11,14 +11,12 @@ function Register() {
   const [senha, setSenha] = useState("");
 
   const [erro, setErro] = useState("");
-  const [sucesso, setSucesso] = useState("");
   const [carregando, setCarregando] = useState(false);
 
   async function criarConta(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     setErro("");
-    setSucesso("");
 
     if (nome.trim().length < 3) {
       setErro("Digite seu nome completo.");
@@ -60,13 +58,12 @@ function Register() {
       }
 
       if (data.session) {
-        setSucesso("Conta criada! Redirecionando para o painel...");
         navigate("/dashboard", { replace: true });
         return;
       }
 
-      setSucesso(
-        "Conta criada, mas não houve uma sessão ativa. Confira a configuração de confirmação de e-mail no Supabase.",
+      setErro(
+        "Conta criada, mas não foi possível iniciar sua sessão. Verifique a configuração de confirmação de e-mail no Supabase.",
       );
     } catch (error) {
       console.error("Erro ao criar conta:", error);
@@ -86,12 +83,14 @@ function Register() {
           <h1 className="text-4xl font-bold">
             Multi<span className="text-amber-500">Barber</span>
           </h1>
+
           <p className="mt-2 text-zinc-400">Crie sua conta e comece agora</p>
         </div>
 
         <form onSubmit={criarConta} className="space-y-4">
           <div>
             <label className="mb-2 block text-sm text-zinc-300">Seu nome</label>
+
             <input
               type="text"
               placeholder="Digite seu nome"
@@ -107,6 +106,7 @@ function Register() {
             <label className="mb-2 block text-sm text-zinc-300">
               Nome da barbearia
             </label>
+
             <input
               type="text"
               placeholder="Ex.: João Barber"
@@ -119,6 +119,7 @@ function Register() {
 
           <div>
             <label className="mb-2 block text-sm text-zinc-300">E-mail</label>
+
             <input
               type="email"
               placeholder="seu@email.com"
@@ -132,6 +133,7 @@ function Register() {
 
           <div>
             <label className="mb-2 block text-sm text-zinc-300">Senha</label>
+
             <input
               type="password"
               placeholder="Crie uma senha"
@@ -147,12 +149,6 @@ function Register() {
           {erro && (
             <p role="alert" className="text-sm text-red-400">
               {erro}
-            </p>
-          )}
-
-          {sucesso && (
-            <p role="status" className="text-sm text-green-400">
-              {sucesso}
             </p>
           )}
 

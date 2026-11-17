@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase } from "./../lib/supabase";
 
 function ProtectedRoute() {
   const [carregando, setCarregando] = useState(true);
@@ -17,6 +17,17 @@ function ProtectedRoute() {
     }
 
     verificarUsuario();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAutenticado(!!session);
+      setCarregando(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (carregando) {

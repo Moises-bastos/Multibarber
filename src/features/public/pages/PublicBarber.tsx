@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import { useParams } from "react-router-dom";
 
 import {
@@ -80,7 +81,6 @@ function PublicBarber() {
   const [servicoSelecionado, setServicoSelecionado] = useState<Servico | null>(
     null,
   );
-
   const [diaSelecionado, setDiaSelecionado] = useState<Dia | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState("");
 
@@ -90,19 +90,21 @@ function PublicBarber() {
   });
 
   const [calendarioAberto, setCalendarioAberto] = useState(false);
-
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
-
   const [telefoneConsulta, setTelefoneConsulta] = useState("");
+
   const [agendamentosConsultados, setAgendamentosConsultados] = useState<
     AgendamentoConsultado[]
   >([]);
+
   const [consultouAgendamentos, setConsultouAgendamentos] = useState(false);
   const [consultandoAgendamentos, setConsultandoAgendamentos] = useState(false);
+
   const [cancelandoConsultaId, setCancelandoConsultaId] = useState<
     number | null
   >(null);
+
   const [erroConsulta, setErroConsulta] = useState("");
   const [mensagemConsulta, setMensagemConsulta] = useState("");
 
@@ -122,10 +124,8 @@ function PublicBarber() {
   const [carregando, setCarregando] = useState(true);
   const [carregandoFuncionamento, setCarregandoFuncionamento] = useState(true);
   const [carregandoHorarios, setCarregandoHorarios] = useState(false);
-
   const [agendando, setAgendando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
-
   const [cancelado, setCancelado] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -192,6 +192,7 @@ function PublicBarber() {
     const ano = data.getFullYear();
     const mes = String(data.getMonth() + 1).padStart(2, "0");
     const dia = String(data.getDate()).padStart(2, "0");
+
     return `${ano}-${mes}-${dia}`;
   }
 
@@ -603,7 +604,8 @@ function PublicBarber() {
     const nomes: Record<string, string> = {
       agendado: "Agendado",
       confirmado: "Confirmado",
-      concluido: "Concluído",
+      concluido: "Atendido",
+      atendido: "Atendido",
       cancelado: "Cancelado",
       disponível: "Disponível",
       disponivel: "Disponível",
@@ -612,16 +614,38 @@ function PublicBarber() {
     return nomes[statusNormalizado] || status;
   }
 
-  function statusPodeCancelar(status: string) {
+  function agendamentoJaPassou(data: string, horario: string): boolean {
+    const agora = new Date();
+
+    // Separa ano, mês e dia da data do agendamento
+    const [ano, mes, dia] = data.slice(0, 10).split("-").map(Number);
+
+    // Separa hora e minuto
+    const [hora, minuto] = horario.slice(0, 5).split(":").map(Number);
+
+    // Cria a data e horário no fuso local do navegador
+    const dataHoraAgendamento = new Date(ano, mes - 1, dia, hora, minuto, 0, 0);
+
+    return dataHoraAgendamento.getTime() <= agora.getTime();
+  }
+
+  function statusPodeCancelar(
+    status: string,
+    data: string,
+    horario: string,
+  ): boolean {
     const statusNormalizado = status.toLowerCase();
-    return (
-      statusNormalizado === "agendado" || statusNormalizado === "confirmado"
-    );
+
+    const statusValido =
+      statusNormalizado === "agendado" || statusNormalizado === "confirmado";
+
+    return statusValido && !agendamentoJaPassou(data, horario);
   }
 
   /*
    * CONSULTAR AGENDAMENTOS PELO TELEFONE
    */
+
   async function consultarAgendamentos() {
     setErroConsulta("");
     setMensagemConsulta("");
@@ -657,9 +681,7 @@ function PublicBarber() {
 
       const resultado = (data || []) as AgendamentoConsultado[];
 
-      const pendentes = resultado.filter(
-        (agendamento) => agendamento.status.toLowerCase() === "agendado",
-      );
+      const pendentes = resultado;
 
       setAgendamentosConsultados(
         pendentes.map((agendamento) => ({
@@ -700,11 +722,25 @@ function PublicBarber() {
   /*
    * CANCELAR UM AGENDAMENTO DA LISTA DE CONSULTA
    */
+
   async function cancelarAgendamentoConsultado(
     agendamento: AgendamentoConsultado,
   ) {
     if (!barbearia) {
       setErroConsulta("Barbearia não encontrada.");
+      return;
+    }
+
+    if (
+      !statusPodeCancelar(
+        agendamento.status,
+        agendamento.data,
+        agendamento.horario,
+      )
+    ) {
+      setErroConsulta(
+        "Este agendamento já passou e não pode mais ser cancelado.",
+      );
       return;
     }
 
@@ -811,6 +847,7 @@ function PublicBarber() {
       setErro(
         "Escolha uma data válida, de segunda a sexta, em que a barbearia esteja aberta.",
       );
+
       setDiaSelecionado(null);
       setHorarioSelecionado("");
       return;
@@ -970,14 +1007,11 @@ function PublicBarber() {
     setServicoSelecionado(null);
     setDiaSelecionado(null);
     setHorarioSelecionado("");
-
     setNome("");
     setTelefone("");
-
     setAgendamentoCriado(null);
     setCancelado(false);
     setErro("");
-
     setHorariosOcupados([]);
     setBloqueiosAgenda([]);
     setCalendarioAberto(false);
@@ -1080,6 +1114,7 @@ function PublicBarber() {
               ) : (
                 <Search size={18} />
               )}
+
               {consultandoAgendamentos ? "Consultando..." : "Consultar"}
             </button>
           </form>
@@ -1115,7 +1150,22 @@ function PublicBarber() {
               </h3>
 
               {agendamentosConsultados.map((agendamento) => {
-                const podeCancelar = statusPodeCancelar(agendamento.status);
+                const statusNormalizado = agendamento.status.toLowerCase();
+
+                const statusAtivo =
+                  statusNormalizado === "agendado" ||
+                  statusNormalizado === "confirmado";
+
+                const agendamentoEncerrado =
+                  statusAtivo &&
+                  agendamentoJaPassou(agendamento.data, agendamento.horario);
+
+                const podeCancelar = statusPodeCancelar(
+                  agendamento.status,
+                  agendamento.data,
+                  agendamento.horario,
+                );
+
                 const cancelamentoEmAndamento =
                   cancelandoConsultaId === agendamento.agendamento_id;
 
@@ -1178,10 +1228,17 @@ function PublicBarber() {
                           ) : (
                             <X size={17} />
                           )}
+
                           {cancelamentoEmAndamento
                             ? "Cancelando..."
                             : "Cancelar agendamento"}
                         </button>
+                      )}
+
+                      {agendamentoEncerrado && (
+                        <p className="text-sm text-zinc-500">
+                          Agendamento encerrado — cancelamento indisponível.
+                        </p>
                       )}
                     </div>
                   </article>
@@ -1190,7 +1247,7 @@ function PublicBarber() {
             </div>
           )}
         </section>
-
+        Parte 2 de 3 — serviços, mini calendário e seleção de horários:
         {/* SERVIÇOS */}
         <section>
           <div className="flex items-center gap-3 mb-6">
@@ -1243,7 +1300,6 @@ function PublicBarber() {
             </div>
           )}
         </section>
-
         {/* DIAS */}
         {servicoSelecionado && (
           <section className="mt-10">
@@ -1252,6 +1308,7 @@ function PublicBarber() {
               <h2 className="text-2xl font-bold">Escolha o dia</h2>
 
               {/* BOTÃO DO MINI-CALENDÁRIO */}
+
               <div className="relative">
                 <button
                   type="button"
@@ -1264,6 +1321,7 @@ function PublicBarber() {
                 </button>
 
                 {/* CALENDÁRIO COMPACTO */}
+
                 {calendarioAberto && (
                   <div className="absolute left-0 top-12 z-40 w-72 rounded-xl border border-zinc-700 bg-zinc-900 p-3 shadow-2xl">
                     <div className="flex items-center justify-between mb-3">
@@ -1354,6 +1412,7 @@ function PublicBarber() {
             </div>
 
             {/* OS SETE CARDS ORIGINAIS */}
+
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {dias.map((dia) => {
                 const selecionado = diaSelecionado?.data === dia.data;
@@ -1372,9 +1431,11 @@ function PublicBarber() {
                     }`}
                   >
                     <div className="text-sm">{dia.nome}</div>
+
                     <div className="text-xs text-zinc-500 mt-2">
                       {dia.data.split("-").reverse().join("/")}
                     </div>
+
                     {!dia.aberto && <div className="text-xs mt-2">Fechado</div>}
                   </button>
                 );
@@ -1382,7 +1443,6 @@ function PublicBarber() {
             </div>
           </section>
         )}
-
         {/* HORÁRIOS */}
         {diaSelecionado && (
           <section className="mt-10">
@@ -1421,7 +1481,7 @@ function PublicBarber() {
             )}
           </section>
         )}
-
+        Parte 3 de 3 — formulário, animações e final do arquivo:
         {/* FORMULÁRIO */}
         {horarioSelecionado && !agendamentoCriado && (
           <section className="mt-10 max-w-xl">
@@ -1433,6 +1493,7 @@ function PublicBarber() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-zinc-400 mb-2">Nome</label>
+
                 <input
                   value={nome}
                   onChange={(event) => setNome(event.target.value)}
@@ -1447,6 +1508,7 @@ function PublicBarber() {
                 <label className="block text-sm text-zinc-400 mb-2">
                   Telefone
                 </label>
+
                 <input
                   value={telefone}
                   onChange={(event) =>
@@ -1478,6 +1540,7 @@ function PublicBarber() {
       </main>
 
       {/* ANIMAÇÕES DO MODAL DE SUCESSO */}
+
       <style>{`
         @keyframes mb-overlay-in {
           from {
@@ -1548,6 +1611,7 @@ function PublicBarber() {
       `}</style>
 
       {/* MODAL DE SUCESSO */}
+
       {agendamentoCriado && (
         <div className="mb-success-overlay fixed inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
           <div className="mb-success-card bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full">
@@ -1563,6 +1627,7 @@ function PublicBarber() {
                     <h2 className="text-xl font-bold">
                       Agendamento realizado!
                     </h2>
+
                     <p className="text-sm text-zinc-400">
                       Seu horário foi reservado.
                     </p>
@@ -1641,6 +1706,7 @@ function PublicBarber() {
       )}
 
       {/* ERRO GERAL */}
+
       {erro && !agendamentoCriado && (
         <div
           role="alert"

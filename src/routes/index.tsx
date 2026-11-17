@@ -14,6 +14,7 @@ import Configuracoes from "../features/configuracoes/Configuracoes";
 import MeuLinkAgendamento from "../features/meu-link/MeuLinkAgendamento";
 
 import DashboardLayout from "../layouts/DashboardLayout";
+import ProtectedRoute from "./ProtectedRoute";
 
 function AppRoutes() {
   return (
@@ -25,14 +26,16 @@ function AppRoutes() {
 
         <Route path="/barbearia/:slug" element={<PublicBarber />} />
 
-        <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/agenda" element={<Agenda />} />
-          <Route path="/clientes" element={<Clientes />} />
-          <Route path="/servicos" element={<Servicos />} />
-          <Route path="/financeiro" element={<Financeiro />} />
-          <Route path="/meu-link" element={<MeuLinkAgendamento />} />
-          <Route path="/configuracoes" element={<Configuracoes />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/agenda" element={<Agenda />} />
+            <Route path="/clientes" element={<Clientes />} />
+            <Route path="/servicos" element={<Servicos />} />
+            <Route path="/financeiro" element={<Financeiro />} />
+            <Route path="/meu-link" element={<MeuLinkAgendamento />} />
+            <Route path="/configuracoes" element={<Configuracoes />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>
